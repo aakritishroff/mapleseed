@@ -182,12 +182,17 @@ func stopQuery(session Session, in Message) {
 	session.Send(Message{in.Seq, "ok", nil})
 }
 
-func main() {
+func serve(name, portString string) {
 	cluster = inmem.NewInMemoryCluster("http://example.com")
-	fmt.Println("Answering on port :8087/_ws")
+	fmt.Printf("Answering on http://localhost%s/_ws", portString)
 	http.Handle("/_ws", websocket.Handler(webHandler))
-	err := http.ListenAndServe(":8087", nil)
+	err := http.ListenAndServe(portString, nil)
 	if err != nil {
 		panic("ListenAndServe: " + err.Error())
 	}
 }
+
+func main() {
+	serve("http://example.com", ":8087")
+}
+
