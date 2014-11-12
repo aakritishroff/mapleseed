@@ -1,25 +1,25 @@
 package main
 
 import (
-	"github.com/sandhawke/inmem"
+	"github.com/sandhawke/inmem/db"
 	"sort"
 	"time"
 )
 
 type Query struct {
-	session Session
+	act Act
 	seq int
-	page *inmem.Page
-	filter inmem.PageFilter
-	sortKey func (page *inmem.Page) string
+	page *db.Page
+	filter db.PageFilter
+	sortKey func (page *db.Page) string
 	limit uint32
 }
 
-func NewQuery(session Session, in Message) (q Query) {
+func NewQuery(act Act, in Message) (q Query) {
 	q = Query{}
 	q.page = session.pod.NewPage() 
 	q.page.Set("isQuery", true)
-	q.session = session
+	q.act = act
 	q.seq = in.Seq
 	q.constructFilter(in.Data["filter"].(map[string]interface{}))
 
@@ -30,7 +30,7 @@ func NewQuery(session Session, in Message) (q Query) {
 	}
 
 	// assume no in.Data["sortBy"] for now, so sort by _id
-	q.sortKey = func (page *inmem.Page) string {
+	q.sortKey = func (page *db.Page) string {
 		return page.URL()
 	}
 
@@ -42,7 +42,7 @@ func (query *Query) constructFilter(expr JSON) {
 	// should we special case certain exprs to have a simpler
 	// filter function?   *shrug*
 
-	query.filter = func (page *inmem.Page) bool {
+	query.filter = func (page *db.Page) bool {
 		return pagePassesFilter(page, expr)
 	}
 }
@@ -52,15 +52,15 @@ func (query *Query) stopped() bool {
 	return query.page.GetDefault("stop", false).(bool)
 }
 
-func (query *Query) added(page *inmem.Page) {
+func (query *Query) added(page *db.Page) {
 	// at some point add a projection filter to limit the properties
-	query.session.Send(Message{query.seq,"add",page.AsJSON()})
+	query.act.Send(Message{query.seq,"add",page.AsJSON()})
 }
-func (query *Query) removed(page *inmem.Page) {
-	query.session.Send(Message{query.seq,"remove",JSON{"_id":page.URL()}})
+func (query *Query) removed(page *db.Page) {
+	query.act.Send(Message{query.seq,"remove",JSON{"_id":page.URL()}})
 }
 func (query *Query) searchComplete() {
-	query.session.Send(Message{query.seq,"searchComplete",nil})
+	query.act.Send(Message{query.seq,"searchComplete",nil})
 }
 
 
@@ -85,7 +85,7 @@ func (query *Query) loop() {
 		for {
 
 			if query.stopped() {
-				query.session.Send(Message{query.seq, "stopped",nil})
+				query.act.Send(Message{query.seq, "stopped",nil})
 				return
 			}
 
@@ -125,7 +125,7 @@ func (query *Query) runOnce() ([]Result) {
 	// Lame version for now -- linear search of the cluster,
 	// no indexing, no link-following
 
-	rawresult := make([]*inmem.Page,0)
+	rawresult := make([]*db.Page,0)
 	cluster.CollectMatchingPages(query.filter, rawresult)
 
 	// in theory we could be keeping the collected matching 
@@ -147,7 +147,7 @@ func (query *Query) runOnce() ([]Result) {
 }
 
 type Result struct {
-	page *inmem.Page
+	page *db.Page
 	key string   //  *shudder* at keeping this, quick-ish hack
 	// maybe switch to http://play.golang.org/p/4PmJVi2_7D style?
 }
@@ -158,7 +158,7 @@ func (a ByKey) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a ByKey) Less(i, j int) bool { return a[i].key < a[j].key }
 
 
-func pagePassesFilter(page *inmem.Page, expr JSON) bool {
+func pagePassesFilter(page *db.Page, expr JSON) bool {
 	// log.Printf("\n\n- comparing %q and %q\n", page, filter);
 	for k,v := range expr {
 		var presentValue, exists  = page.Get(k);
