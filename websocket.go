@@ -13,7 +13,7 @@ package main
 
 import (
 	"log"
-	"fmt"
+	// "fmt"
 	"io"
 	"code.google.com/p/go.net/websocket"
 	// "net/http"
@@ -48,6 +48,8 @@ func (act WSAct) SendFinal(op string, data JSON) {
 	act.sendRaw(OutMessage{act.seq, true, op, data})
 }
 
+// we need to formalize this more at some point.   Maybe
+// flags for types of errors?
 func (act WSAct) Error(code uint32, message string) {
 	act.sendRaw(OutMessage{act.seq, true, "err", 
 		JSON{"text": message}})
@@ -61,7 +63,7 @@ func (act WSAct) sendRaw(msg OutMessage) {
 	}
 }
 
-func webHandler(ws *websocket.Conn) {
+func websocketHandler(ws *websocket.Conn) {
 
 	origin := ws.LocalAddr() // then turn into domain name?
 
@@ -79,7 +81,7 @@ func webHandler(ws *websocket.Conn) {
 			return
 		}
 		nextSeq = in.Seq + 1
-		fmt.Printf("Received: %q\n", in)
+		// fmt.Printf("Received: %q\n", in)
 
 		act := WSAct{ws,in.Seq}
 
@@ -106,29 +108,28 @@ func webHandler(ws *websocket.Conn) {
 			//  pod,_ = cluster.NewPod(act.userId)
 			act.SendFinal("ok", nil)
 
+		case "createPod":
+			name,_ := in.Data["name"].(string)
+			createPod(act, name)
+
 		case "create":
-
 			options := CreationOptions{}
-			options.inContainer = in.Data["inContainer"].(*string)
-			options.suggestedName = in.Data["suggestedName"].(*string)
-			options.requiredId = in.Data["requiredId"].(*string)
-			options.initialData = in.Data["initialData"].(*JSON)
-			c := in.Data["isConstant"].(*bool)
-			options.isConstant = ( c != nil && *c )
-
+			log.Printf("op=create options=%q",in.Data)
+			options.inContainer,_ = in.Data["inContainer"].(string)
+			options.suggestedName, _ = in.Data["suggestedName"].(string)
+			options.requiredId,_ = in.Data["requiredId"].(string)
+			options.initialData,_ = in.Data["initialData"].(JSON)
+			options.isConstant,_ = in.Data["isConstant"].(bool)
 			create(act, options)
 
 		case "read":
-			url := in.Data["_id"].(string)
+			url,_ := in.Data["_id"].(string)
 			read(act, url)
 			
-		case "overlay":
-			url := in.Data["_id"].(string)
-			onlyIfMatch := ""
-			if x := in.Data["_etag"]; x != nil {
-				onlyIfMatch = x.(string)
-			} 
-			overlay(act, url, onlyIfMatch, in.Data)
+		case "update":
+			url,_ := in.Data["_id"].(string)
+			onlyIfMatch,_ := in.Data["_etag"].(string)
+			update(act, url, onlyIfMatch, in.Data)
 
 		case "delete":
 			url := in.Data["_id"].(string)

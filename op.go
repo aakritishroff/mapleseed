@@ -13,8 +13,9 @@ Web and for real-time data sync.
 package main
 
 import (
-	//"log"
-	//"fmt"
+	"log"
+	"regexp"
+	"fmt"
 	//"github.com/sandhawke/inmem/db"
 )
 
@@ -41,19 +42,63 @@ type Act interface {
 	// func origin() string // domain name of source of browser code
 }
 
+var validPodname *regexp.Regexp
+func init() {
+	validPodname = regexp.MustCompile("^[a-z][a-z0-9]*$")
+}
 
-// pointers since they are optional
+func createPod(act Act, name string) {
+	
+	if validPodname.MatchString(name) {
+		podurl := fmt.Sprintf(podURLTemplate, name)
+		pod, existed := cluster.NewPod(podurl)
+		if existed {
+			act.Error(0, "Pod name already taken")
+		} else {
+			act.SendFinal("ok", JSON{"_id":pod.URL()})
+		}
+	} else {
+		act.Error(0, "Invalid pod name syntax")
+	}
+}
+
+
+
+
+// if options are not specified, they'll have "zero" values
 type CreationOptions struct {
-	inContainer *string
-	suggestedName *string
-	requiredId *string
-	initialData *JSON
-	isConstant bool
+	inContainer string   // for now, this is the pod URL
+	suggestedName string // NOT IMPL
+	requiredId string   // NOT IMPL
+	initialData JSON   // NOT IMPL
+	isConstant bool   // NOT IMPL
 }
 
 func create(act Act, options CreationOptions) {
 
+	log.Printf("create() options %q", options)
+
+	pod := cluster.PodByURL(options.inContainer)
+	if (pod == nil) {
+		act.Error(0, "No such container")
+		return
+	}
+	page,etag := pod.NewPage()
+	
+	// TODO should set the init value WHILE IT'S LOCKED.
+
+	act.SendFinal("ok", JSON{"_id":page.URL(), "_etag":etag})
+	
+
 	/*
+      ADD:
+           act.tmpIdMap()
+
+           and allow ids like  tmp:whatever
+           which get replaced (skolemized) during create,
+              so you can send graphs, and send related
+              resources in a pipeline, without RTT for each
+            
 
 	log.Printf("in.Data[_id]", in.Data["_id"])
 	urlintf := in.Data["_id"]
@@ -79,12 +124,19 @@ func create(act Act, options CreationOptions) {
 
 
 func read(act Act, url string) {
+	log.Printf("read() url %q", url)
 	page,_ := cluster.PageByURL(url, false)
+	if page == nil {
+		act.Error(404, "page not found")
+		return
+	}
 	act.SendFinal("ok", page.AsJSON())
 }
 
-func overlay(act Act, url string, onlyIfMatch string, data JSON) {
+func update(act Act, url string, onlyIfMatch string, data JSON) {
+	log.Printf("update() url %q, etag %q, data %q", url, onlyIfMatch, data)
 	page,_ := cluster.PageByURL(url, false)
+	log.Printf("0");
 	etag, notMatched := page.SetProperties(data, onlyIfMatch)
 	if notMatched {
 		act.Error(409, "etag not matched")
@@ -93,7 +145,7 @@ func overlay(act Act, url string, onlyIfMatch string, data JSON) {
 	act.SendFinal("ok", JSON{"_etag":etag})
 }
 
-// (delete is a golang keyword)
+// (delete is a golang keyword, so we'll use pageDelete instead)
 func pageDelete(act Act, url string) {
 	page,_ := cluster.PageByURL(url, false)
 	page.Delete()
