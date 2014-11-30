@@ -15,9 +15,9 @@ type Query struct {
 	limit uint32
 }
 
-func NewQuery(act Act, in Message) (q Query) {
+func StartQuery(act Act, in InMessage) (q Query) {
 	q = Query{}
-	q.page = session.pod.NewPage() 
+	q.page = session.pod.NewPage()  //  IN WHAT CONTAINER?
 	q.page.Set("isQuery", true)
 	q.act = act
 	q.seq = in.Seq
@@ -54,13 +54,13 @@ func (query *Query) stopped() bool {
 
 func (query *Query) added(page *db.Page) {
 	// at some point add a projection filter to limit the properties
-	query.act.Send(Message{query.seq,"add",page.AsJSON()})
+	query.act.Send(OutMessage{query.seq,"add",page.AsJSON()})
 }
 func (query *Query) removed(page *db.Page) {
-	query.act.Send(Message{query.seq,"remove",JSON{"_id":page.URL()}})
+	query.act.Send(OutMessage{query.seq,"remove",JSON{"_id":page.URL()}})
 }
 func (query *Query) searchComplete() {
-	query.act.Send(Message{query.seq,"searchComplete",nil})
+	query.act.Send(OutMessage{query.seq,"searchComplete",nil})
 }
 
 
@@ -196,3 +196,8 @@ func pagePassesFilter(page *db.Page, expr JSON) bool {
 	}
 	return true;
 }
+
+
+
+// to a run-once version?
+

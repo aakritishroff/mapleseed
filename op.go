@@ -8,6 +8,8 @@ maybe other things (like ./op_test.go).
 The operations are basically CRUD + Query, but set up for being on the
 Web and for real-time data sync.
 
+Might be called DatapageNetworkAPI or something like that.
+
 */
 
 package main
@@ -22,10 +24,10 @@ import (
 /*
 
    An "Act" is a single request-response interaction.  Unlike typical
-   HTTP, we support multiple responses to one request, with send and
-   sendFinal.  So the "act" parameter is a lot like the (req, res)
-   parameters one often passes around, but it's more abstract since
-   this isn't just for HTTP.
+   HTTP, we support multiple responses (mid-request events) on a
+   single request, with Event/Result/Error.  So the "act" parameter is
+   a lot like the (req, res) parameters one often passes around, but
+   it's more abstract since this isn't just for HTTP.
 
    I was calling it "Interaction" but that was quite long.  Think of
    it like one act in a many-act play, perhaps.  Or just short for
@@ -33,13 +35,18 @@ import (
 
 */
 type Act interface {
-	Send(op string, data JSON) // when streaming results back
-	SendFinal(op string, data JSON)
-	Error(code uint32, message string)
-	// func pod() *db.Pod // wont change but might be null
-	// func clientId() string // == pod.URL() if client owns this pod [multi?]
+	Closed() bool    // mostly for propagating errors; when closed, just return
+	Event(op string, data JSON) // when streaming results back
+	Result(data JSON)   
+	Error(code int16, message string, details JSON)
+	//Pod() *db.Pod     // wont change but might be null
+	UserId() string   // == pod.URL() if user owns Pod() being accessed
 	// func clientIP() ?
 	// func origin() string // domain name of source of browser code
+}
+
+func Error1(act Act, message string) {
+	act.Error(0, message, JSON{});
 }
 
 var validPodname *regexp.Regexp
@@ -49,16 +56,19 @@ func init() {
 
 func createPod(act Act, name string) {
 	
+	log.Printf("createPod %q", name)
 	if validPodname.MatchString(name) {
 		podurl := fmt.Sprintf(podURLTemplate, name)
-		pod, existed := cluster.NewPod(podurl)
+		pod, existed := cluster.NewPod(podurl)    // HANGS, some lock
 		if existed {
-			act.Error(0, "Pod name already taken")
+			log.Printf("Pod name %q already taken by %q", name, podurl)
+			Error1(act, "Pod name already taken")
 		} else {
-			act.SendFinal("ok", JSON{"_id":pod.URL()})
+			log.Printf("created pod %s", pod.URL())
+			act.Result(JSON{"_id":pod.URL()})
 		}
 	} else {
-		act.Error(0, "Invalid pod name syntax")
+		Error1(act, "Invalid pod name syntax")
 	}
 }
 
@@ -70,7 +80,7 @@ type CreationOptions struct {
 	inContainer string   // for now, this is the pod URL
 	suggestedName string // NOT IMPL
 	requiredId string   // NOT IMPL
-	initialData JSON   // NOT IMPL
+	initialData JSON   // 
 	isConstant bool   // NOT IMPL
 }
 
@@ -78,16 +88,23 @@ func create(act Act, options CreationOptions) {
 
 	log.Printf("create() options %q", options)
 
+	if options.inContainer == "" {
+		options.inContainer = act.UserId()
+	}
+
 	pod := cluster.PodByURL(options.inContainer)
 	if (pod == nil) {
-		act.Error(0, "No such container")
+		Error1(act, "No such container")
 		return
 	}
 	page,etag := pod.NewPage()
 	
 	// TODO should set the init value WHILE IT'S LOCKED.
+	etag, _ = page.SetProperties(options.initialData, "");
+	log.Printf("initialData was %q", options.initialData);
+	log.Printf("now  %q", page.Properties());
 
-	act.SendFinal("ok", JSON{"_id":page.URL(), "_etag":etag})
+	act.Result(JSON{"_id":page.URL(), "_etag":etag})
 	
 
 	/*
@@ -127,46 +144,56 @@ func read(act Act, url string) {
 	log.Printf("read() url %q", url)
 	page,_ := cluster.PageByURL(url, false)
 	if page == nil {
-		act.Error(404, "page not found")
+		act.Error(404, "page not found", JSON{})
 		return
 	}
-	act.SendFinal("ok", page.AsJSON())
+	act.Result(page.AsJSON())
 }
 
 func update(act Act, url string, onlyIfMatch string, data JSON) {
 	log.Printf("update() url %q, etag %q, data %q", url, onlyIfMatch, data)
 	page,_ := cluster.PageByURL(url, false)
+	if page == nil {
+		act.Error(404, "page not found", JSON{})
+		return
+	}
 	log.Printf("0");
 	etag, notMatched := page.SetProperties(data, onlyIfMatch)
 	if notMatched {
-		act.Error(409, "etag not matched")
+		act.Error(409, "etag not matched", JSON{})
 		return
 	}
-	act.SendFinal("ok", JSON{"_etag":etag})
+	act.Result(JSON{"_etag":etag})
 }
 
 // (delete is a golang keyword, so we'll use pageDelete instead)
 func pageDelete(act Act, url string) {
 	page,_ := cluster.PageByURL(url, false)
 	page.Delete()
-	act.SendFinal("ok", JSON{})
+	act.Result(JSON{})
+}
+
+func startQuery(act Act, options QueryOptions) {	
+	if options.inContainer == "" {
+		options.inContainer = act.UserId()
+	}
+	q := NewQuery(act, options)
+	go q.loop()
+	if act.Closed() { return }
+	act.Event("queryCreated", q.page.AsJSON())
+	// result/error will come much later
+}
+
+func stopQuery(act Act, url string) {
+	page,_ := cluster.PageByURL(url, false)
+	if page == nil {
+		act.Error(404, "No such query", JSON{});
+	}
+	page.Set("stop", true)    // vs DELETE?   might want to keep stats, etc?
+	act.Result(page.AsJSON());
 }
 
 /*
-func startQuery(act Act, in Message) {	
-	q := NewQuery(act, in)
-	go q.loop()
-	act.Send(Message{in.Seq, "ok", q.page.AsJSON()})
-}
-
-func stopQuery(act Act, in Message) {
-	url := in.Data["_id"].(string)
-	page,_ := act.pod.PageByURL(url, false)
-	page.Set("stop", true)    // vs DELETE?   might want to keep stats, etc?
-	act.Send(Message{in.Seq, "ok", nil})
-}
-
-
 func (act *Act) inMySpace(url string) bool {
 	space := act.pod.URL()
 	return url[:len(space)] == space

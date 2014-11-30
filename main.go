@@ -31,7 +31,7 @@ func serve(hubURL, portString string) {
 func main() {
 
 	var hubURL = flag.String("hubURL", "http://localhost", "main URL of service")
-	var argPodURLTemplate = flag.String("podURLTemplate", "http://localhost/%s", "URLs of created pods, with %s as the pod name")
+	var argPodURLTemplate = flag.String("pods", "http://localhost:8080/pod/%s", "URLs of created pods, with %s as the pod name")
 	var port = flag.String("port", "8080", "web server port")
 	var logdir = flag.String("logdir", "/var/log/mapleseed", "where to put the log files")
 	var dolog = flag.Bool("log", false, "log to file instead of stdout")
