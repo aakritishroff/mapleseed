@@ -1,0 +1,107 @@
+Someday we'll move this to an issue tracker.   This works for now.
+
+PROTOCOL
+
+* Serve resources directly on HTTP, at least for GET
+
+* Also do LDP operations (POST, PUT, DELETE)
+
+* Support longpoll again
+
+* Try out HTTP/2 as WebSockets alternative
+
+DELETE
+
+* Figure out when/how we clean up what and re-use what
+
+* Autodelete / Temp Pages / Time-to-live
+
+USERS
+
+* create account
+
+* reset password
+
+* micropod creation / deletion
+
+* set read-access rules
+
+* play with how write-access works
+
+* delete account
+
+* download everything from account (zip?)
+
+QUERIES
+
+* Redo the watch part of queries to depend only on the rate of change
+  of the db, not its size.  That is, changed pages should be handed to
+  watchers, rather than triggering entirely new queries of the whole DB
+
+* Decentralize -- link-following in queries + backlinks + webmention;
+  query things on other servers; mirror things on other servers
+
+* Keep the watchers in a tree based on their filters, so we do a
+  minimal evaluation of filter expressions.
+
+* Allow user-defined and/or parameterized filter functions, like
+  sorting based on distance from a given vector (as opposed to just
+  sorting on position)
+
+TESTING
+
+* Check for race conditions/deadlock on big multicore machine
+
+* Write various usage-pattern tests to help find concurrency problems
+
+* Check code coverage
+
+* Develop some benchmarks
+
+* Boids as a test/demo?
+
+RDF
+
+* Implement vocabspec, mapping to/from RDF
+
+* bring in parsers/serializers for Turtle, JSON-LD, 
+
+* offer SPARQL service
+
+* make use of SPARQL service
+
+PERSISTENCE
+
+* log changes/snapshots
+
+* restore from changes/snapshots
+
+* keep big (>8k) values on disk instead of in-memory
+
+* be keeping copy on S3
+
+* try using mongodb to store stuff
+
+RULES
+
+* Implement virtual-property rules (with a child NodeJS process, a golang
+  rules engine, NaCL, ... some combination of the above)
+
+* Implement virtual-page rules (with a child NodeJS process, a golang
+  rules engine, NaCL, ... some combination of the above)
+
+DEVELOPERS
+
+* package it for "go get"
+
+* server documentation
+
+* provide dynamic debugging trace.  trace.log("filterEval","stuff...")
+  + "trace.begin(); defer trace.end()" as a way to indent trace logs.
+  it all does nothing unless that tag ("filterEval" in above) is
+  turned on.
+
+* make debugging trace available to clients over special websocket
+
+
+

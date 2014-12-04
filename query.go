@@ -2,7 +2,7 @@ package main
 
 import (
     "log"
-    "github.com/sandhawke/inmem/db"
+	db "github.com/sandhawke/pagestore/inmem"
     "sort"
     "time"
 )

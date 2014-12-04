@@ -4,11 +4,11 @@ import (
 	"log"
 	"code.google.com/p/go.net/websocket"
 	"net/http"
-	"github.com/sandhawke/inmem/db"
 	"flag"
 	"os"
 	"time"
 	"fmt"
+	db "github.com/sandhawke/pagestore/inmem"
 )
 
 type JSON map[string]interface{};
@@ -18,7 +18,6 @@ var cluster *db.Cluster
 var podURLTemplate string
 
 func serve(hubURL, portString string) {
-	cluster = db.NewInMemoryCluster(hubURL)
 	log.Printf("Answering on %s%s", hubURL, portString)
 	http.Handle("/.well-known/podsocket/v1", websocket.Handler(websocketHandler))
     http.HandleFunc("/", httpHandler)
@@ -35,7 +34,7 @@ func main() {
 	var port = flag.String("port", "8080", "web server port")
 	var logdir = flag.String("logdir", "/var/log/mapleseed", "where to put the log files")
 	var dolog = flag.Bool("log", false, "log to file instead of stdout")
-	// var restore = flag.String("restore", "", "restore state from given json dump file")
+	var restore = flag.String("restore", "", "restore state from given json dump file")
 	flag.Parse()
 
 	podURLTemplate = *argPodURLTemplate
@@ -55,16 +54,20 @@ func main() {
 		log.SetOutput(logfile)
 	}
 
-	/*
+	cluster = db.NewInMemoryCluster(*hubURL)
+
 	if *restore != "" {
 		fi, err := os.Open(*restore)
 		if err != nil {
 			log.Fatal(err)
 			panic(err)
 		}
-		restoreCluster(fi)
+		err = cluster.RestoreFrom(fi)
+		if err != nil {
+			log.Fatal(err)
+			panic(err)
+		}
 	}
-    */
 
 	serve(*hubURL, ":"+*port)
 }

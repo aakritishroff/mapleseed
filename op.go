@@ -169,6 +169,10 @@ func update(act Act, url string, onlyIfMatch string, data JSON) {
 // (delete is a golang keyword, so we'll use pageDelete instead)
 func pageDelete(act Act, url string) {
 	page,_ := cluster.PageByURL(url, false)
+	if page == nil {
+		act.Error(404, "page not found", JSON{})
+		return
+	}
 	page.Delete()
 	act.Result(JSON{})
 }
@@ -180,7 +184,7 @@ func startQuery(act Act, options QueryOptions) {
 	q := NewQuery(act, options)
 	go q.loop()
 	if act.Closed() { return }
-	act.Event("queryCreated", q.page.AsJSON())
+	act.Event("QueryCreated", q.page.AsJSON())
 	// result/error will come much later
 }
 

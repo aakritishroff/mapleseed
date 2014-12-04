@@ -18,7 +18,7 @@ import (
 	"code.google.com/p/go.net/websocket"
 	// "net/http"
 	// "net"
-	"github.com/sandhawke/inmem/db"
+	db "github.com/sandhawke/pagestore/inmem"
 	// "github.com/sandhawke/inmem/db"
 )
 
