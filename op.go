@@ -18,7 +18,6 @@ import (
 	"log"
 	"regexp"
 	"fmt"
-	//"github.com/sandhawke/inmem/db"
 )
 
 /*
@@ -182,6 +181,7 @@ func startQuery(act Act, options QueryOptions) {
 		options.inContainer = act.UserId()
 	}
 	q := NewQuery(act, options)
+	if q == nil { return }
 	go q.loop()
 	if act.Closed() { return }
 	act.Event("QueryCreated", q.page.AsJSON())
@@ -192,6 +192,7 @@ func stopQuery(act Act, url string) {
 	page,_ := cluster.PageByURL(url, false)
 	if page == nil {
 		act.Error(404, "No such query", JSON{});
+		return
 	}
 	page.Set("stop", true)    // vs DELETE?   might want to keep stats, etc?
 	act.Result(page.AsJSON());

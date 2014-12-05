@@ -28,11 +28,12 @@ type Query struct {
     options QueryOptions
 }
 
-func NewQuery(act Act, options QueryOptions) (q Query) {
-    q = Query{}
+func NewQuery(act Act, options QueryOptions) (q *Query) {
+    q = &Query{}
     q.options = options // for the ones that don't need processing
     q.pod = cluster.PodByURL(options.inContainer)
     if (q.pod == nil) {
+		q = nil;
         act.Error(400, "bad inContainer value", JSON{"valueUsed":options.inContainer});
         return
     }
@@ -115,12 +116,13 @@ func (query *Query) loop() {
         // query.act.Event("progress",JSON{"percentComplete":float64(0)})
         new := query.runOnce()
 
-        //log.Printf("Ran query, producing: %q", new)
+        log.Printf("Ran query, producing: %q", new)
 
         // symmetric set difference on sorted lists
         i:=0
         j:=0
         different:=false
+		firstTime := true
         log.Printf("%q doing diff, closed? %b", &query, query.act.Closed());
     loop:
         for {
@@ -169,6 +171,7 @@ func (query *Query) loop() {
 		// we can't use the 'different' flag, because we care
 		// about the values changing as well
         if query.options.watching_AllResults {
+			log.Printf("Computing AllResults")
 
 			propsChanged := false
 
@@ -179,13 +182,16 @@ func (query *Query) loop() {
 				}
                 pages[i] = result.page.AsJSON();
             }
-			if propsChanged || different {
+			if propsChanged || different || firstTime {
+				firstTime = false
 				log.Printf("AllResults count %d", query.count)
 				query.act.Event("AllResults", JSON{"results":pages,"fullCount":query.count})
 				lastActivity = time.Now()
 				lastSentAtModCount = modCount
 			}
-        }
+        } else {
+			log.Printf("AllResults not wanted")
+		}
 
         old = new
 
@@ -270,7 +276,7 @@ func pagePassesFilter(page *db.Page, expr JSON) bool {
 
                 // conjoin all the operators, I guess...
 
-                vmap := v.(JSON)
+                vmap := v.(map[string]interface {})
                 if (vmap["$exists"] == true) {
                     //log.Printf("  %q exists?", k)
                     if !exists {
