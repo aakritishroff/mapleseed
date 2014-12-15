@@ -16,6 +16,7 @@ type JSON map[string]interface{};
 var cluster *db.Cluster
 
 var podURLTemplate string
+var thisHubURL string
 
 func serve(hubURL, portString string) {
 	log.Printf("Answering on %s%s", hubURL, portString)
@@ -38,6 +39,7 @@ func main() {
 	flag.Parse()
 
 	podURLTemplate = *argPodURLTemplate
+	thisHubURL = *hubURL
 
 	if *dolog {
 		err := os.MkdirAll(*logdir, 0700)
