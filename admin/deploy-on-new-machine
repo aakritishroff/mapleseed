@@ -1,0 +1,23 @@
+#!/bin/sh
+
+if [ ! -f admin/deploy ]; then
+  echo I think you are running this from the wrong place
+  exit 1 
+fi
+
+host=$1
+
+if test "$host" = "" ; then
+  echo 'What hostname?'
+  exit 1
+fi
+
+scp admin/debian-setup.sh root@${host}:
+scp admin/supervisord.conf.template root@${host}:
+ssh root@$host "sh debian-setup.sh $host"
+
+#sed "s/@@SUBHOST/$1/" < admin/debian-init-script > admin/debian-init-script-$1
+#ssh root@$host "apt-get install rcconf mercurial; rcconf"
+#ssh root@$host "go get 'code.google.com/p/go.net/websocket'"
+
+# ./deploy $host

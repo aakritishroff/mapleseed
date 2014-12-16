@@ -1,0 +1,11 @@
+[program:mapleseed]
+command=/root/go/bin/mapleseed -port=80 -log -logdir /var/log/mapleseed -hubURL  "http://@@HOST" -pods="http://%%s.@@HOST" ; -restore=/var/log/mapleseed/save.json
+stdout_logfile=/var/log/mapleseed/stdout.log
+stdout_logfile_backups=100
+stdout_logfile_maxbytes=10MB
+stderr_logfile=/var/log/mapleseed/stderr.log
+stderr_logfile_backups=100
+stderr_logfile_maxbytes=10MB
+autostart=true
+autorestart=true
+
