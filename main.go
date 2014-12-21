@@ -8,7 +8,7 @@ import (
 	"os"
 	"time"
 	"fmt"
-	db "github.com/sandhawke/pagestore/inmem"
+	db "github.com/aakritishroff/datapages/inmem"
 )
 
 type JSON map[string]interface{};
