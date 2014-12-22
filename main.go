@@ -1,17 +1,17 @@
 package main
 
 import (
-	"log"
 	"code.google.com/p/go.net/websocket"
-	"net/http"
 	"flag"
+	"fmt"
+	db "github.com/aakritishroff/datapages/inmem"
+	"log"
+	"net/http"
 	"os"
 	"time"
-	"fmt"
-	db "github.com/sandhawke/pagestore/inmem"
 )
 
-type JSON map[string]interface{};
+type JSON map[string]interface{}
 
 var cluster *db.Cluster
 
@@ -21,7 +21,7 @@ var thisHubURL string
 func serve(hubURL, portString string) {
 	log.Printf("Answering on %s%s", hubURL, portString)
 	http.Handle("/.well-known/podsocket/v1", websocket.Handler(websocketHandler))
-    http.HandleFunc("/", httpHandler)
+	http.HandleFunc("/", httpHandler)
 	err := http.ListenAndServe(portString, nil)
 	if err != nil {
 		panic("ListenAndServe: " + err.Error())
@@ -29,7 +29,6 @@ func serve(hubURL, portString string) {
 }
 
 func main() {
-
 	var hubURL = flag.String("hubURL", "http://localhost", "main URL of service")
 	var argPodURLTemplate = flag.String("pods", "http://localhost:8080/pod/%s", "URLs of created pods, with %s as the pod name")
 	var port = flag.String("port", "8080", "web server port")
@@ -46,11 +45,11 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		logfilename := *logdir+"/log-"+time.Now().Format("20060102")
+		logfilename := *logdir + "/log-" + time.Now().Format("20060102")
 		fmt.Printf("logging to %s\n", logfilename)
-		logfile, err := os.OpenFile(logfilename, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0611);
+		logfile, err := os.OpenFile(logfilename, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0611)
 		if err != nil {
-			// ??? not sure why I'm getting "No such file or directory" 
+			// ??? not sure why I'm getting "No such file or directory"
 			panic(err)
 		}
 		log.SetOutput(logfile)
@@ -72,5 +71,5 @@ func main() {
 	}
 
 	serve(*hubURL, ":"+*port)
-}
 
+}
