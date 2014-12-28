@@ -1,20 +1,20 @@
-package main
+package op
 
 import (
     "log"
-	db "github.com/sandhawke/pagestore/inmem"
     "sort"
     "time"
+	db "../data/inmem"
 )
 
 type QueryOptions struct {
-    inContainer string
-    filter JSON
-    watching_AllResults bool
-    watching_Appear     bool
-    watching_Disappear  bool
-    watching_Progress   bool
-    limit uint32
+    InContainer string
+    Filter JSON
+    Watching_AllResults bool
+    Watching_Appear     bool
+    Watching_Disappear  bool
+    Watching_Progress   bool
+    Limit uint32
 }
 
 type Query struct {
@@ -31,20 +31,20 @@ type Query struct {
 func NewQuery(act Act, options QueryOptions) (q *Query) {
     q = &Query{}
     q.options = options // for the ones that don't need processing
-    q.pod = cluster.PodByURL(options.inContainer)
+    q.pod = act.Cluster().PodByURL(options.InContainer)
     if (q.pod == nil) {
 		q = nil;
-        act.Error(400, "bad inContainer value", JSON{"valueUsed":options.inContainer});
+        act.Error(400, "bad InContainer value", JSON{"valueUsed":options.InContainer});
         return
     }
     q.page,_ = q.pod.NewPage()
     q.page.Set("isQuery", true)
     q.act = act
-    q.constructFilter(options.filter)
+    q.constructFilter(options.Filter)
 
     // we COULD make the limit come from the page, so it can
     // be tweaked during execution...    :-)
-    q.limit = options.limit
+    q.limit = options.Limit
 
     // assume no in.Data["sortBy"] for now, so sort by _id
     q.sortKey = func (page *db.Page) string {
@@ -72,7 +72,7 @@ func (query *Query) stopped() bool {
 func (query *Query) differenceFound(different *bool) {
     if (!*different) {
         *different = true
-        if query.options.watching_Progress {
+        if query.options.Watching_Progress {
             query.act.Event("Progress",JSON{"percentComplete":float64(0),"results":query.count})
         }
     }
@@ -81,18 +81,18 @@ func (query *Query) differenceFound(different *bool) {
 func (query *Query) added(page *db.Page) {
     // at some point add a projection filter to limit the properties
 	log.Printf("Appear %s", page.URL());
-    if query.options.watching_Appear {
+    if query.options.Watching_Appear {
         query.act.Event("Appear",page.AsJSON())
     }
 }
 func (query *Query) removed(page *db.Page) {
 	log.Printf("Disappear %s", page.URL());
-    if query.options.watching_Disappear {
+    if query.options.Watching_Disappear {
         query.act.Event("Disappear",JSON{"_id":page.URL()})
     }
 }
 func (query *Query) searchComplete() {
-    if query.options.watching_Progress {
+    if query.options.Watching_Progress {
         query.act.Event("Progress",JSON{"percentComplete":float64(100)})
     }
 }
@@ -111,7 +111,7 @@ func (query *Query) loop() {
         // query if any mods have happened since we started.  There might
         // have been mods early in our traversal -- we don't lock the whole
         // cluster while doing our search
-        modCount := cluster.ModCount()
+        modCount := query.act.Cluster().ModCount()
 
         // query.act.Event("progress",JSON{"percentComplete":float64(0)})
         new := query.runOnce()
@@ -170,7 +170,7 @@ func (query *Query) loop() {
 
 		// we can't use the 'different' flag, because we care
 		// about the values changing as well
-        if query.options.watching_AllResults {
+        if query.options.Watching_AllResults {
 			log.Printf("Computing AllResults")
 
 			propsChanged := false
@@ -202,9 +202,9 @@ func (query *Query) loop() {
 
         if query.act.Closed() { return }
 
-        log.Printf("waiting for mod since %d (its %d)", modCount, cluster.ModCount());
-        cluster.WaitForModSince(modCount)
-        log.Printf("WAITED, %d != %d", modCount, cluster.ModCount());
+        log.Printf("waiting for mod since %d (its %d)", modCount, query.act.Cluster().ModCount());
+        query.act.Cluster().WaitForModSince(modCount)
+        log.Printf("WAITED, %d != %d", modCount, query.act.Cluster().ModCount());
 
 		// if we're running through this loop, without doing any network
 		// activity, we'd never notice if the client went away.  So make
@@ -227,7 +227,7 @@ func (query *Query) runOnce() ([]Result) {
     // no indexing, no link-following
 
     rawresult := make([]*db.Page,0)
-    cluster.CollectMatchingPages(query.filter, &rawresult)
+    query.act.Cluster().CollectMatchingPages(query.filter, &rawresult)
     query.count = uint32(len(rawresult))
     //log.Printf("rawresult: %q", rawresult)
 

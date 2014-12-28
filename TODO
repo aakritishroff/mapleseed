@@ -2,13 +2,15 @@ Someday we'll move this to an issue tracker.   This works for now.
 
 PROTOCOL
 
-* Serve resources directly on HTTP, at least for GET
+* Serve resources directly on HTTP, at least for GET   
 
 * Also do LDP operations (POST, PUT, DELETE)
 
 * Support longpoll again
 
 * Try out HTTP/2 as WebSockets alternative
+
+* Try out Server-Sent Events + LDP
 
 DELETE
 
@@ -22,7 +24,7 @@ USERS
 
 * reset password
 
-* micropod creation / deletion
+* micropod (cookiepod) creation / deletion
 
 * set read-access rules
 
@@ -31,6 +33,10 @@ USERS
 * delete account
 
 * download everything from account (zip?)
+
+* multiple universes
+
+* backward compat for current users?
 
 QUERIES
 

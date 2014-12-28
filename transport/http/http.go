@@ -11,7 +11,7 @@ based on client requests.
 
 */
 
-package main
+package http
 
 import ( 
 	"log"
@@ -19,7 +19,8 @@ import (
 	"strings"
 	"net/http"
 	"encoding/json"
-	db "github.com/sandhawke/pagestore/inmem"
+	db "../../data/inmem"
+	"../../op"
 )
 
 type HAct struct {
@@ -27,9 +28,10 @@ type HAct struct {
 	pod *db.Pod
 	userId string
 	closed bool
+	cluster *db.Cluster
 }
 
-func (act *HAct) Event(op string, data JSON) {
+func (act *HAct) Event(op string, data op.JSON) {
 	// ignored?
 	// 
 	// at the moment, we have no idea how to send events over
@@ -37,7 +39,7 @@ func (act *HAct) Event(op string, data JSON) {
 	//
 }
 
-func (act *HAct) Result(data JSON) {
+func (act *HAct) Result(data op.JSON) {
 	act.w.Header().Set("Content-Type", "application/json")
 	bytes, _ := json.MarshalIndent(data, "", "    ")
 	act.w.Write(bytes)
@@ -48,7 +50,7 @@ func (act *HAct) Result(data JSON) {
 
 // we need to formalize this more at some point.   Maybe
 // flags for types of errors?
-func (act *HAct) Error(code int16, message string, details JSON) {
+func (act *HAct) Error(code int16, message string, details op.JSON) {
 	act.w.WriteHeader(int(code))
 	fmt.Fprintf(act.w, "error: %s\n\ndetails: %q\n", message, details)
 	act.closed = true
@@ -66,7 +68,12 @@ func (act *HAct) UserId() string {
 	return act.userId
 }
 
-func httpHandler(w http.ResponseWriter, r *http.Request) {
+func (act *HAct) Cluster() *db.Cluster {
+	return act.cluster
+}
+
+
+func Handler(cluster *db.Cluster, w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("\n");
 	log.Printf("Request %q\n", r)
@@ -99,12 +106,12 @@ func httpHandler(w http.ResponseWriter, r *http.Request) {
             "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, Wait-For-None-Match")
     }
 
-	act := &HAct{w, pod, userId, false}
+	act := &HAct{w, pod, userId, false, cluster}
 
 	log.Printf("Method  %q\n", r.Method)
 	switch r.Method {
 	case "DELETE":
-		pageDelete(act, url)
+		op.Delete(act, url)
 
 	case "GET":
 		switch path {
@@ -156,9 +163,9 @@ func httpHandler(w http.ResponseWriter, r *http.Request) {
 			log.Printf("Accept: %q", accept)
 			if strings.Contains(accept, "text/html") && 
 				!strings.Contains(accept, "application/json") {
-				focusPage(act, url)
+				focusPage(act, url, cluster)
 			} else {
-				read(act, url)
+				op.Read(act, url)
 			}
 
 			/*
@@ -289,7 +296,7 @@ crosscloud.micropodProvider("%s");
 }
 
 
-func offerJSON(w http.ResponseWriter, r *http.Request, frame JSON) {
+func offerJSON(w http.ResponseWriter, r *http.Request, frame op.JSON) {
 
 	// if they'd prefer HTML, maybe format it as HTML or something?
 
@@ -299,12 +306,12 @@ func offerJSON(w http.ResponseWriter, r *http.Request, frame JSON) {
 }
 
 
-func focusPage(act *HAct, url string) {
+func focusPage(act *HAct, url string, cluster *db.Cluster) {
 	
 	log.Printf("focusPage() url %q", url)
 	page,_ := cluster.PageByURL(url, false)
 	if page == nil {
-		act.Error(404, "page not found", JSON{})
+		act.Error(404, "page not found", op.JSON{})
 		return
 	}
 
@@ -338,5 +345,5 @@ crosscloud.displayInApp(appData)
 </script>
 </body>
 </html>
-`, thisHubURL)
+`, cluster.HubURL)
 }

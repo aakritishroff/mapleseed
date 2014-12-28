@@ -2,26 +2,27 @@ package main
 
 import (
 	"log"
-	"code.google.com/p/go.net/websocket"
 	"net/http"
 	"flag"
 	"os"
 	"time"
 	"fmt"
-	db "github.com/sandhawke/pagestore/inmem"
+	db "./data/inmem"
+	httpTransport "./transport/http"
+	wsTransport "./transport/websocket"
 )
 
 type JSON map[string]interface{};
 
-var cluster *db.Cluster
+func serve(cluster *db.Cluster, portString string) {
+	log.Printf("Answering on %s%s", cluster.HubURL, portString)
+	
+	wsTransport.Register(cluster);
 
-var podURLTemplate string
-var thisHubURL string
-
-func serve(hubURL, portString string) {
-	log.Printf("Answering on %s%s", hubURL, portString)
-	http.Handle("/.well-known/podsocket/v1", websocket.Handler(websocketHandler))
-    http.HandleFunc("/", httpHandler)
+	hh := func(w http.ResponseWriter, r *http.Request) {
+		httpTransport.Handler(cluster, w, r)
+	}
+    http.HandleFunc("/", hh)
 	err := http.ListenAndServe(portString, nil)
 	if err != nil {
 		panic("ListenAndServe: " + err.Error())
@@ -38,9 +39,6 @@ func main() {
 	var restore = flag.String("restore", "", "restore state from given json dump file")
 	flag.Parse()
 
-	podURLTemplate = *argPodURLTemplate
-	thisHubURL = *hubURL
-
 	if *dolog {
 		err := os.MkdirAll(*logdir, 0700)
 		if err != nil {
@@ -56,7 +54,9 @@ func main() {
 		log.SetOutput(logfile)
 	}
 
-	cluster = db.NewInMemoryCluster(*hubURL)
+	cluster := db.NewInMemoryCluster(*hubURL)
+	cluster.PodURLTemplate = *argPodURLTemplate
+	cluster.HubURL = *hubURL
 
 	if *restore != "" {
 		fi, err := os.Open(*restore)
@@ -71,6 +71,6 @@ func main() {
 		}
 	}
 
-	serve(*hubURL, ":"+*port)
+	serve(cluster, ":"+*port)
 }
 
