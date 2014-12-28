@@ -1,0 +1,18 @@
+#!/bin/sh
+
+
+TOP=.js-test-area
+if [ ! -d $TOP/node_modules/crosscloud ]; then 
+  mkdir -p $TOP
+  cd $TOP
+  mkdir -p node_modules
+  npm install crosscloud
+  cd node_modules/crosscloud
+  npm install
+else
+  cd $TOP/node_modules/crosscloud
+fi
+if [ -z "$PODURL" ]; then
+  export PODURL="http://localhost:8080/pod/testuser/"
+fi
+exec npm test

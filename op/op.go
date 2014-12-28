@@ -12,13 +12,16 @@ Might be called DatapageNetworkAPI or something like that.
 
 */
 
-package main
+package op
 
 import (
+	db "../data/inmem"
 	"fmt"
 	"log"
 	"regexp"
 )
+
+type JSON map[string]interface{}
 
 /*
 
@@ -39,7 +42,8 @@ type Act interface {
 	Result(data JSON)
 	Error(code int16, message string, details JSON)
 	//Pod() *db.Pod     // wont change but might be null
-	UserId() string // == pod.URL() if user owns Pod() being accessed
+	Cluster() *db.Cluster // maybe give a more restrictive interface?
+	UserId() string       // == pod.URL() if user owns Pod() being accessed
 	// func clientIP() ?
 	// func origin() string // domain name of source of browser code
 }
@@ -54,12 +58,12 @@ func init() {
 	validPodname = regexp.MustCompile("^[a-z][a-z0-9]*$")
 }
 
-func createPod(act Act, name string) {
+func CreatePod(act Act, name string) {
 
 	log.Printf("createPod %q", name)
 	if validPodname.MatchString(name) {
-		podurl := fmt.Sprintf(podURLTemplate, name)
-		pod, existed := cluster.NewPod(podurl) // HANGS, some lock
+		podurl := fmt.Sprintf(act.Cluster().PodURLTemplate, name)
+		pod, existed := act.Cluster().NewPod(podurl) // HANGS, some lock
 		if existed {
 			log.Printf("Pod name %q already taken by %q", name, podurl)
 			Error1(act, "Pod name already taken")
@@ -74,22 +78,22 @@ func createPod(act Act, name string) {
 
 // if options are not specified, they'll have "zero" values
 type CreationOptions struct {
-	inContainer   string // for now, this is the pod URL
-	suggestedName string // NOT IMPL
-	requiredId    string // NOT IMPL
-	initialData   JSON   //
-	isConstant    bool   // NOT IMPL
+	InContainer   string // for now, this is the pod URL
+	SuggestedName string // NOT IMPL
+	RequiredId    string // NOT IMPL
+	InitialData   JSON   //
+	IsConstant    bool   // NOT IMPL
 }
 
-func create(act Act, options CreationOptions) {
+func Create(act Act, options CreationOptions) {
 
 	log.Printf("create() options %q", options)
 
-	if options.inContainer == "" {
-		options.inContainer = act.UserId()
+	if options.InContainer == "" {
+		options.InContainer = act.UserId()
 	}
 
-	pod := cluster.PodByURL(options.inContainer)
+	pod := act.Cluster().PodByURL(options.InContainer)
 	if pod == nil {
 		Error1(act, "No such container")
 		return
@@ -97,75 +101,57 @@ func create(act Act, options CreationOptions) {
 	page, etag := pod.NewPage()
 
 	// TODO should set the init value WHILE IT'S LOCKED.
-	etag, _ = page.SetProperties(options.initialData, "")
-	log.Printf("initialData was %q", options.initialData)
+	etag, _ = page.SetProperties(options.InitialData, "")
+	log.Printf("InitialData was %q", options.InitialData)
 	log.Printf("now  %q", page.Properties())
 
 	act.Result(JSON{"_id": page.URL(), "_etag": etag})
 
-	createACL(page, act.UserId(), false, false)
-
-	for _, myPod := range cluster.Pods() {
-		log.Printf("Pod: %s \n", myPod.URL())
-		for _, myPage := range myPod.Pages() {
-			log.Printf("Pages: %s \n", myPage.URL())
-		}
-		log.Println("-----------")
-
-	}
-
 	/*
-		      ADD:
-		           act.tmpIdMap()
+	      ADD:
+	           act.tmpIdMap()
 
-		           and allow ids like  tmp:whatever
-		           which get replaced (skolemized) during create,
-		              so you can send graphs, and send related
-		              resources in a pipeline, without RTT for each
+	           and allow ids like  tmp:whatever
+	           which get replaced (skolemized) during create,
+	              so you can send graphs, and send related
+	              resources in a pipeline, without RTT for each
 
 
-			log.Printf("in.Data[_id]", in.Data["_id"])
-			urlintf := in.Data["_id"]
-			var page *db.Page
-			if urlintf == nil {
-				page = act.pod.NewPage()
+		log.Printf("in.Data[_id]", in.Data["_id"])
+		urlintf := in.Data["_id"]
+		var page *db.Page
+		if urlintf == nil {
+			page = act.pod.NewPage()
+		} else {
+			url := urlintf.(string)
+			podurl := url [:len(act.pod.URL())]
+			log.Printf("podurl %q, url %q , path %q", act.pod.URL(),
+				url, url[len(act.pod.URL()):])
+			if act.pod.URL() == podurl {
+				page,_ = act.pod.PageByURL(url, true)
 			} else {
-				url := urlintf.(string)
-				podurl := url [:len(act.pod.URL())]
-				log.Printf("podurl %q, url %q , path %q", act.pod.URL(),
-					url, url[len(act.pod.URL()):])
-				if act.pod.URL() == podurl {
-					page,_ = act.pod.PageByURL(url, true)
-				} else {
-					act.Send(Message{in.Seq, "fail", JSON{"err":"requested prefix is in the wrong web space: "+url+" doesnt start with "+podurl}});
-					return
-				}
+				act.Send(Message{in.Seq, "fail", JSON{"err":"requested prefix is in the wrong web space: "+url+" doesnt start with "+podurl}});
+				return
 			}
-			act.Send(Message{in.Seq, "ok", JSON{"_id":page.URL()}});
+		}
+		act.Send(Message{in.Seq, "ok", JSON{"_id":page.URL()}});
 
 	*/
 }
 
-func read(act Act, url string) {
+func Read(act Act, url string) {
 	log.Printf("read() url %q", url)
-	page, _ := cluster.PageByURL(url, false)
+	page, _ := act.Cluster().PageByURL(url, false)
 	if page == nil {
 		act.Error(404, "page not found", JSON{})
 		return
 	}
-	if !isReadable(act.UserId(), url) {
-		act.Error(550, "permission denied", JSON{})
-		return
-	}
-
 	act.Result(page.AsJSON())
-
-	log.Printf("User %s authorized to read %s\n", act.UserId(), url)
 }
 
-func update(act Act, url string, onlyIfMatch string, data JSON) {
+func Update(act Act, url string, onlyIfMatch string, data JSON) {
 	log.Printf("update() url %q, etag %q, data %q", url, onlyIfMatch, data)
-	page, _ := cluster.PageByURL(url, false)
+	page, _ := act.Cluster().PageByURL(url, false)
 	if page == nil {
 		act.Error(404, "page not found", JSON{})
 		return
@@ -176,34 +162,22 @@ func update(act Act, url string, onlyIfMatch string, data JSON) {
 		act.Error(409, "etag not matched", JSON{})
 		return
 	}
-
-	if !isWritable(act.UserId(), url) {
-		act.Error(550, "permission denied", JSON{})
-		return
-	}
 	act.Result(JSON{"_etag": etag})
-
-	log.Printf("User %s authorized to update %s\n", act.UserId(), url)
 }
 
-// (delete is a golang keyword, so we'll use pageDelete instead)
-func pageDelete(act Act, url string) {
-	page, _ := cluster.PageByURL(url, false)
+func Delete(act Act, url string) {
+	page, _ := act.Cluster().PageByURL(url, false)
 	if page == nil {
 		act.Error(404, "page not found", JSON{})
-		return
-	}
-	if !isWritable(act.UserId(), url) {
-		act.Error(550, "permission denied", JSON{})
 		return
 	}
 	page.Delete()
 	act.Result(JSON{})
 }
 
-func startQuery(act Act, options QueryOptions) {
-	if options.inContainer == "" {
-		options.inContainer = act.UserId()
+func StartQuery(act Act, options QueryOptions) {
+	if options.InContainer == "" {
+		options.InContainer = act.UserId()
 	}
 	q := NewQuery(act, options)
 	if q == nil {
@@ -217,8 +191,8 @@ func startQuery(act Act, options QueryOptions) {
 	// result/error will come much later
 }
 
-func stopQuery(act Act, url string) {
-	page, _ := cluster.PageByURL(url, false)
+func StopQuery(act Act, url string) {
+	page, _ := act.Cluster().PageByURL(url, false)
 	if page == nil {
 		act.Error(404, "No such query", JSON{})
 		return

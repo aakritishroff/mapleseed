@@ -1,10 +1,11 @@
 package main
 
 import (
-	"code.google.com/p/go.net/websocket"
+	db "./data/inmem"
+	httpTransport "./transport/http"
+	wsTransport "./transport/websocket"
 	"flag"
 	"fmt"
-	db "github.com/aakritishroff/datapages/inmem"
 	"log"
 	"net/http"
 	"os"
@@ -13,15 +14,15 @@ import (
 
 type JSON map[string]interface{}
 
-var cluster *db.Cluster
+func serve(cluster *db.Cluster, portString string) {
+	log.Printf("Answering on %s%s", cluster.HubURL, portString)
 
-var podURLTemplate string
-var thisHubURL string
+	wsTransport.Register(cluster)
 
-func serve(hubURL, portString string) {
-	log.Printf("Answering on %s%s", hubURL, portString)
-	http.Handle("/.well-known/podsocket/v1", websocket.Handler(websocketHandler))
-	http.HandleFunc("/", httpHandler)
+	hh := func(w http.ResponseWriter, r *http.Request) {
+		httpTransport.Handler(cluster, w, r)
+	}
+	http.HandleFunc("/", hh)
 	err := http.ListenAndServe(portString, nil)
 	if err != nil {
 		panic("ListenAndServe: " + err.Error())
@@ -29,6 +30,7 @@ func serve(hubURL, portString string) {
 }
 
 func main() {
+
 	var hubURL = flag.String("hubURL", "http://localhost", "main URL of service")
 	var argPodURLTemplate = flag.String("pods", "http://localhost:8080/pod/%s", "URLs of created pods, with %s as the pod name")
 	var port = flag.String("port", "8080", "web server port")
@@ -36,9 +38,6 @@ func main() {
 	var dolog = flag.Bool("log", false, "log to file instead of stdout")
 	var restore = flag.String("restore", "", "restore state from given json dump file")
 	flag.Parse()
-
-	podURLTemplate = *argPodURLTemplate
-	thisHubURL = *hubURL
 
 	if *dolog {
 		err := os.MkdirAll(*logdir, 0700)
@@ -55,7 +54,9 @@ func main() {
 		log.SetOutput(logfile)
 	}
 
-	cluster = db.NewInMemoryCluster(*hubURL)
+	cluster := db.NewInMemoryCluster(*hubURL)
+	cluster.PodURLTemplate = *argPodURLTemplate
+	cluster.HubURL = *hubURL
 
 	if *restore != "" {
 		fi, err := os.Open(*restore)
@@ -70,6 +71,5 @@ func main() {
 		}
 	}
 
-	serve(*hubURL, ":"+*port)
-
+	serve(cluster, ":"+*port)
 }

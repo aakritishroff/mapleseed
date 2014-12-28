@@ -9,54 +9,56 @@ to handle the client request.
 
 */
 
-package main
+package websocket
 
 import (
-	"code.google.com/p/go.net/websocket"
-	//"fmt"
-	"io"
 	"log"
+	// "fmt"
+	"code.google.com/p/go.net/websocket"
+	"io"
+	"net/http"
 	// "net/http"
 	// "net"
-	db "github.com/aakritishroff/datapages/inmem"
-	//db "github.com/sandhawke/pagestore/inmem"
+	db "../../data/inmem"
+	"../../op"
 )
 
 type InMessage struct {
-	Seq  int    `json:"seq"`
-	Op   string `json:"op"`
-	Data JSON   `json:"data"`
+	Seq  int     `json:"seq"`
+	Op   string  `json:"op"`
+	Data op.JSON `json:"data"`
 }
 
 type OutMessage struct {
-	InReplyTo int    `json:"inReplyTo"`
-	Final     bool   `json:"final"`
-	Op        string `json:"op"`
-	Data      JSON   `json:"data"`
+	InReplyTo int     `json:"inReplyTo"`
+	Final     bool    `json:"final"`
+	Op        string  `json:"op"`
+	Data      op.JSON `json:"data"`
 }
 
 type WSAct struct {
-	ws     *websocket.Conn
-	seq    int
-	pod    *db.Pod
-	userId string
-	closed bool
+	ws      *websocket.Conn
+	seq     int
+	pod     *db.Pod
+	cluster *db.Cluster
+	userId  string
+	closed  bool
 }
 
-func (act *WSAct) Event(op string, data JSON) {
+func (act *WSAct) Event(op string, data op.JSON) {
 	act.sendRaw(OutMessage{act.seq, false, op, data})
 }
 
-func (act *WSAct) Result(data JSON) {
+func (act *WSAct) Result(data op.JSON) {
 	act.sendRaw(OutMessage{act.seq, true, "ok", data})
 	act.closed = true
 }
 
 // we need to formalize this more at some point.   Maybe
 // flags for types of errors?
-func (act *WSAct) Error(code int16, message string, details JSON) {
+func (act *WSAct) Error(code int16, message string, details op.JSON) {
 	act.sendRaw(OutMessage{act.seq, true, "err",
-		JSON{"text": message}})
+		op.JSON{"text": message}})
 	act.closed = true
 }
 
@@ -66,6 +68,10 @@ func (act *WSAct) Closed() bool {
 
 func (act *WSAct) Pod() *db.Pod {
 	return act.pod
+}
+
+func (act *WSAct) Cluster() *db.Cluster {
+	return act.cluster
 }
 
 func (act *WSAct) UserId() string {
@@ -88,7 +94,15 @@ func (act *WSAct) sendRaw(msg OutMessage) {
 	}
 }
 
-func websocketHandler(ws *websocket.Conn) {
+func Register(cluster *db.Cluster) {
+	ws := func(ws *websocket.Conn) {
+		handler(cluster, ws)
+	}
+	http.Handle("/.well-known/podsocket/v1", websocket.Handler(ws))
+}
+
+func handler(cluster *db.Cluster, ws *websocket.Conn) {
+
 	origin := ws.LocalAddr() // then turn into domain name?
 
 	// @@@  defer:  stop any queries we've started
@@ -109,7 +123,7 @@ func websocketHandler(ws *websocket.Conn) {
 		nextSeq = in.Seq + 1
 		log.Printf("Received: %q\n", in)
 
-		act := &WSAct{ws, in.Seq, pod, userId, false}
+		act := &WSAct{ws, in.Seq, pod, cluster, userId, false}
 
 		/*
 			var url string
@@ -119,7 +133,7 @@ func websocketHandler(ws *websocket.Conn) {
 
 				if (!act.inMySpace(url)) {
 					act.Send(Message{in.Seq, "fail",
-						JSON{"err":"requested URL not on this pod"}})
+						op.JSON{"err":"requested URL not on this pod"}})
 					return
 				}
 			}
@@ -141,74 +155,74 @@ func websocketHandler(ws *websocket.Conn) {
 
 		case "whoami":
 			log.Printf("still logged in %s", userId)
-			act.Result(JSON{"userId": userId})
+			act.Result(op.JSON{"userId": userId})
 
 		case "createPod":
 			name, _ := in.Data["name"].(string)
-			createPod(act, name)
+			op.CreatePod(act, name)
 
 		case "create":
-			options := CreationOptions{}
+			options := op.CreationOptions{}
 			log.Printf("op=create options=%q", in.Data)
-			options.inContainer, _ = in.Data["inContainer"].(string)
-			options.suggestedName, _ = in.Data["suggestedName"].(string)
-			options.requiredId, _ = in.Data["requiredId"].(string)
+			options.InContainer, _ = in.Data["inContainer"].(string)
+			options.SuggestedName, _ = in.Data["suggestedName"].(string)
+			options.RequiredId, _ = in.Data["requiredId"].(string)
 
-			// I don't quite understand why we can't call it JSON here, but
+			// I don't quite understand why we can't call it op.JSON here, but
 			// when we do, the value gets silently lost
-			options.initialData, _ = in.Data["initialData"].(map[string]interface{})
-			options.isConstant, _ = in.Data["isConstant"].(bool)
-			create(act, options)
+			options.InitialData, _ = in.Data["initialData"].(map[string]interface{})
+			options.IsConstant, _ = in.Data["isConstant"].(bool)
+			op.Create(act, options)
 
 		case "read":
 			url, _ := in.Data["_id"].(string)
-			read(act, url)
+			op.Read(act, url)
 
 		case "update":
 			url, _ := in.Data["_id"].(string)
 			onlyIfMatch, _ := in.Data["_etag"].(string)
-			update(act, url, onlyIfMatch, in.Data)
+			op.Update(act, url, onlyIfMatch, in.Data)
 
 		case "delete":
 			url := in.Data["_id"].(string)
 
-			pageDelete(act, url)
+			op.Delete(act, url)
 
 		case "startQuery":
-			options := QueryOptions{}
-			options.inContainer, _ = in.Data["inContainer"].(string)
+			options := op.QueryOptions{}
+			options.InContainer, _ = in.Data["inContainer"].(string)
 			limit, limitGiven := in.Data["limit"].(float64)
 			if limitGiven {
-				options.limit = uint32(limit)
+				options.Limit = uint32(limit)
 			}
-			options.filter, _ = in.Data["filter"].(map[string]interface{})
+			options.Filter, _ = in.Data["filter"].(map[string]interface{})
 			events, eventsGiven := in.Data["events"].(map[string]interface{})
 			if eventsGiven {
-				options.watching_AllResults, _ = events["AllResults"].(bool)
-				options.watching_Progress, _ = events["Progress"].(bool)
-				options.watching_Appear, _ = events["Appear"].(bool)
-				options.watching_Disappear, _ = events["Disappear"].(bool)
+				options.Watching_AllResults, _ = events["AllResults"].(bool)
+				options.Watching_Progress, _ = events["Progress"].(bool)
+				options.Watching_Appear, _ = events["Appear"].(bool)
+				options.Watching_Disappear, _ = events["Disappear"].(bool)
 			} else {
-				options.watching_AllResults = true
-				options.watching_Progress = true
-				options.watching_Appear = true
-				options.watching_Disappear = true
+				options.Watching_AllResults = true
+				options.Watching_Progress = true
+				options.Watching_Appear = true
+				options.Watching_Disappear = true
 			}
 
 			log.Printf("op=startQuery options=%q, parsed=%q", in.Data, options)
 
-			startQuery(act, options)
+			op.StartQuery(act, options)
 
 		case "stopQuery":
 			id, _ := in.Data["_id"].(string)
-			stopQuery(act, id)
+			op.StopQuery(act, id)
 
 		case "ping":
-			act.Result(JSON{"isPong": true, "modCount": cluster.ModCount()})
+			act.Result(op.JSON{"isPong": true, "modCount": cluster.ModCount()})
 
 		default:
 			log.Printf("Unimplemented op: %s", in.Op)
-			act.Error(400, "Operation unknown or unimplemented", JSON{})
+			act.Error(400, "Operation unknown or unimplemented", op.JSON{})
 
 		}
 	}

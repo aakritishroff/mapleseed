@@ -1,4 +1,5 @@
 *~
 OLD/
 mapleseed
-
+.js-test-area/
+*.log
