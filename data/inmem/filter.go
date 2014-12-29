@@ -4,8 +4,8 @@ package inmem
 type PageFilter func (page *Page) bool
 
 func (cluster *Cluster) CollectMatchingPages(filter PageFilter, results *[]*Page) {
-    cluster.RLock()
-    defer cluster.RUnlock()
+    cluster.rlock()
+    defer cluster.runlock()
     for _, pod := range cluster.pods {
         pod.CollectMatchingPages(filter, results)
     }
@@ -18,8 +18,8 @@ func (pod *Pod) CollectMatchingPages(filter PageFilter, results *[]*Page) {
     }
 }
 func (page *Page) CollectMatchingPages(filter PageFilter, results *[]*Page) {
-    page.RLock()
-    defer page.RUnlock()
+    page.mutex.RLock()
+    defer page.mutex.RUnlock()
     if filter(page) {
         *results = append(*results, page)
     }

@@ -8,11 +8,6 @@ import (
 
 
 
-func (pod *Pod) podTouched() {
-    pod.cluster.clusterTouched()
-}
-
-
 type Pod struct {
     sync.RWMutex  
     rootPage      *Page
@@ -20,6 +15,15 @@ type Pod struct {
     cluster       *Cluster
     pages         map[string]*Page
     newPageNumber uint64
+	Listeners PageListenerList
+}
+
+
+func (pod *Pod) touched(page *Page) {
+	pod.Listeners.Notify(page);
+    if pod.cluster != nil {
+		pod.cluster.clusterTouched()
+	}
 }
 
 func (pod *Pod) URL() string {
@@ -54,7 +58,7 @@ func (pod *Pod) NewPage() (page *Page, etag string) {
     page.pod = pod
     etag = page.etag()
     pod.pages[path] = page
-    pod.podTouched()
+    pod.touched(page)
     pod.Unlock()
     return
 }
@@ -71,7 +75,7 @@ func (pod *Pod) PageByPath(path string, mayCreate bool) (page *Page, created boo
         page.pod = pod
         pod.pages[path] = page
         created = true
-        pod.podTouched()
+        pod.touched(page)
 		return
     }
     if mayCreate && page.deleted {

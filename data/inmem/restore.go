@@ -12,6 +12,9 @@ import (
 type JSON map[string]interface{}
 
 func (cluster *Cluster) RestoreFrom(src io.Reader) error {
+	cluster.lock()   // no one better touch anything while we're doing this!
+	defer cluster.unlock()
+
 	dec := json.NewDecoder(src)
 	var v JSON
 	if err := dec.Decode(&v); err != nil {
@@ -50,7 +53,7 @@ func (cluster *Cluster) RestoreFrom(src io.Reader) error {
 				return errors.New("page already existed: "+id)
 			}
 			
-			page.OverlayWithMap(pmap)
+			page.locked_OverlayWithMap(pmap)
 			
 			page.pageModCount = uint64(pmap["_etag"].(float64))
 			

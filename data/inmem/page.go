@@ -1,25 +1,53 @@
 package inmem
 
 import (
-    //"log"
+    "log"
     "fmt"
     "sync"
     "encoding/json"
 	"time"
 )
 
+/*
+// We could do something like this, to allow for the values
+// inside app-data to be properly typed?  Or we could use 
+// reflection (look at how json library does it).  We'd like
+// to be able to have a page pointer be the pointer when seen
+// internally, and the URL when seen externally....
+type Value interface {
+	AsString() (value string, err error)
+	AsFloat64() (value float64, err error)
+	AsTime() (value time.Time, err error)
+	AsPage() (value *Page, err error)
+}
+*/
+
+type ValueManager interface {
+	Set(interface{}) 
+	Get() interface{}
+}
+
+// NO, do this:
+type VirtualValue interface {
+	Set(interface{}) 
+	Get() interface{}
+}
+// when this is SET as the value, then after that
+// gets and sets RUN this, instead of actually
+// changing the value.    Can it remove itself...?
+
+
 type Page struct {
-    sync.RWMutex   // this library is required to be threadsafe
+    mutex          sync.RWMutex // public functions are threadsafe
     pod            *Pod
-    path           string // always starts with a slash
-    contentType    string
-    content        string
+    path           string // always starts with a slash... er NOT ANYMORE
     pageModCount   uint64
 	clusterModCount uint64
 	lastModified   time.Time
     deleted        bool // needed for watching 404 pages, at least
 
-    longpollQ chan chan bool   // OH, I should probably use sync.Cond instead
+	Listeners PageListenerList
+    // longpollQ chan chan bool   // OH, I should probably use sync.Cond instead
 
     /* for a !hasContent resource, the content is a JSON/RDF/whatever
     /* serialization of the appData plus some of our own metadata.
@@ -28,14 +56,18 @@ type Page struct {
     // hasContent     bool
     appData        map[string]interface{}
 
-    /* some kind of intercepter for Pod and Cluster to have their
-    /* own special properties which appear when you call Get and Set,
-    /* and which end up in the JSON somehow... */
-    extraProperties func() (props []string)
-    extraGetter    func(prop string) (value interface{}, handled bool)
-    extraSetter    func(prop string, value interface{}) (handled bool)
+	virtualAppData map[string]ValueManager
 }
 
+func NewPage() (page *Page, etag string) {
+	page = &Page{}
+    page.path = ""
+    page.pod = nil
+    etag = page.etag()
+	page.lastModified = time.Now().UTC()
+	page.appData = make(map[string]interface{})
+    return
+}
 
 func (page *Page) Pod() *Pod {
     return page.pod
@@ -55,50 +87,74 @@ func (page *Page) Path() string {
 }
 func (page *Page) URL() string {
     return page.pod.urlWithSlash + page.path
+	//   wait, what?   that's two slashes!
 }
 
+
 func (page *Page) Content(accept []string) (contentType string, content string, etag string) {
-    page.RLock()
-    contentType = page.contentType
-    content = page.content
+    page.mutex.RLock()
+	defer page.mutex.RUnlock()
+    ct, typeExists := page.Get("contentType")
+    c, contentExists := page.Get("content")
     etag = page.etag()
-    page.RUnlock()
-    return
+	if typeExists && contentExists {
+		contentType = ct.(string)
+		content = c.(string)
+		return
+	}
+	if contentExists {
+		// ?! not sure how to handle this  
+		contentType = "text/plain"
+		return
+	}
+	bytes, err := page.MarshalJSON()
+	if err != nil {
+		log.Printf("cant marshal json: %s", err)
+		contentType = "text/plain"
+		content = ""
+	} else {
+		contentType = "application/json"
+		content = string(bytes)
+	}
+	return
 }
 
 // onlyIfMatch is the HTTP If-Match header value; abort if its the wrong etag
 func (page *Page) SetContent(contentType string, content string, onlyIfMatch string) (etag string, notMatched bool) {
-    page.Lock()
+	modified := false
+    page.mutex.Lock()
+	defer page.doneWithLock(&modified)
     //fmt.Printf("onlyIfMatch=%q, etag=%q\n", onlyIfMatch, page.etag())
     if onlyIfMatch == "" || onlyIfMatch == page.etag() {
         if contentType == "application/json" {
-            page.Zero()
-            page.OverlayWithJSON([]byte(content))
+            page.locked_Zero()
+            page.locked_OverlayWithJSON([]byte(content))
         } else {
-            page.contentType = contentType
-            page.content = content
+            page.locked_Set("contentType", contentType)
+            page.locked_Set("content", content)
         }
-        page.touched() // not sure if we need to keep WLock during touched()
+		modified = true
         etag = page.etag()
     } else {
         notMatched = true
     }
-    page.Unlock()
     return
 }
 
 func (page *Page) SetProperties(m map[string]interface{}, onlyIfMatch string) (etag string, notMatched bool) {
     //fmt.Printf("onlyIfMatch=%q, etag=%q\n", onlyIfMatch, page.etag())
-    // we can't lock it like this, since Set also locks it... page.Lock()
-    // FIXME
+	modified := false
+	page.mutex.Lock()
+	// cant use defer
     if onlyIfMatch == "" || onlyIfMatch == page.etag() {
-        page.OverlayWithMap(m)
-        // page.touched() // not sure if we need to keep WLock during touched()
-        etag = page.etag()
+		//log.Printf("modifying")
+        page.locked_OverlayWithMap(m)
+		modified = true  // TODO check if it was really modified
     } else {
         notMatched = true
     }
-    // page.Unlock()
+	page.doneWithLock(&modified)
+	etag = page.etag()  // needs to be AFTER doneWithLock runs (so no defer)
     return
 }
 
@@ -109,89 +165,77 @@ func (page *Page) SetProperties(m map[string]interface{}, onlyIfMatch string) (e
 // re-creates this URL?  (etags need to be like "20141204-3" maybe,
 // assuming we can remember deleted pages for a day.)
 func (page *Page) Delete() {
-    page.Lock()
+    page.mutex.Lock()
     page.deleted = true
-    page.contentType = ""
-    page.content = ""
 	page.appData = make(map[string]interface{})
-    page.touched()
-    page.Unlock()
+	modified := true
+    page.doneWithLock(&modified)
 }
 
 func (page *Page) Deleted() bool {
     return page.deleted
 }
 
-/*
-func (page *Page) AccessControlPage() AccessController {
+func (page *Page) doneWithLock(modified *bool) {
+
+	//log.Printf("doneWithLock(%q)", modified)
+	if *modified {
+
+		//log.Printf(".. modified")
+		page.pageModCount++
+		//log.Printf(".. counter %q", page.pageModCount)
+		page.lastModified = time.Now().UTC()
+
+		// this doesn't work -- we can't safely update the cluster modcount
+		if page.pod != nil {
+			page.clusterModCount = page.pod.cluster.modCount
+		}
+
+	} else {
+		//log.Printf(".. not modified")
+	}
+	page.mutex.Unlock()
+
+	page.Listeners.Notify(page);
+    if page.pod != nil {
+		page.pod.touched(page)
+	}
 }
-*/
 
-// alas, we can't just use .touched on the cluster and pod, 
-// because we'd end up with infinite recursion with the page
-// notifying itself
-
-
-func (page *Page) touched() uint64 { // already locked
-    var ch chan bool
-
-    page.pod.podTouched()
-    page.pageModCount++
-	page.clusterModCount = page.pod.cluster.modCount
-	page.lastModified = time.Now().UTC()
-
-	// switch to cond var?
-    for {
-        select {
-        case ch = <-page.longpollQ:
-            ch <- true // let them know they can go on!
-        default:
-            return page.pageModCount
-        }
-    }
-}
 func (page *Page) WaitForNoneMatch(etag string) {
-    page.RLock()
+    page.mutex.RLock()
     // don't use defer, since we need to unlock before done
     if etag != page.etag() {
-        page.RUnlock()
+        page.mutex.RUnlock()
         return
     }
-    ch := make(chan bool)
-    page.longpollQ <- ch // queue up ch as a response point for us
-    page.RUnlock()
-    _ = <-ch // wait for that response
+    ch := make(chan *Page)
+	page.Listeners.Add(ch)
+	page.mutex.RUnlock()
+	_ = <- ch
+	page.Listeners.Remove(ch)
 }
 
 
 
-//////////////////////////////
-
-// maybe we should generalize these as virtual properties and
-// have a map of them?   But some of them are the same for every page...
-//
-// should we have _contentType and _content among them?
-//
-// that would let us serialize nonData resources in json
-
 func (page *Page) Properties() (result []string) {
-    result = make([]string,0,len(page.appData)+5)
-    result = append(result, "_id")
-    result = append(result, "_etag")
+    result = make([]string,0,len(page.appData)+4)
+
+	// should we even bother to include these two, since they're so obvious?
+    result = append(result, "_id")     
     result = append(result, "_owner")
+
+    result = append(result, "_etag")
     result = append(result, "_lastModified")
-    if page.contentType != "" {
-        result = append(result, "_contentType")
-        result = append(result, "_content")
-    }
-    if page.extraProperties != nil {
-        result = append(result, page.extraProperties()...)
-    }
-    page.RLock()
+
+    page.mutex.RLock()
     for k := range page.appData {
         result = append(result, k)
     }
-    page.RUnlock()
+    for k := range page.virtualAppData {
+        result = append(result, k)
+    }
+    page.mutex.RUnlock()
     return
 }
 
@@ -202,6 +246,12 @@ func (page *Page) GetDefault(prop string, def interface{}) (value interface{}) {
 }
 
 func (page *Page) Get(prop string) (value interface{}, exists bool) {
+    page.mutex.RLock()
+    defer page.mutex.RUnlock()
+	return page.locked_Get(prop)
+}
+
+func (page *Page) locked_Get(prop string) (value interface{}, exists bool) {
     if prop == "_id" {
         if page.pod == nil { return "", false }
         return page.URL(), true
@@ -217,52 +267,47 @@ func (page *Page) Get(prop string) (value interface{}, exists bool) {
     if prop == "_lastModified" {
         return page.lastModified.Format(time.RFC3339Nano), true
     }
-    if prop == "_contentType" {
-        return page.contentType, true
-    }
-    if prop == "_content" {
-        return page.content, true
-    }
-    if page.extraGetter != nil {
-        value, exists = page.extraGetter(prop)
-        if exists {
-            return value, true
-        }
-    }
-    page.RLock()
     value, exists = page.appData[prop]
-    page.RUnlock()
+	if ! exists {
+		manager, exists := page.virtualAppData[prop]
+		if exists {
+			value = manager.Get()
+		}
+	}
     return
 }
 
 func (page *Page) Set(prop string, value interface{}) {
-    if page.extraSetter != nil {
-        handled := page.extraSetter(prop, value)
-        if handled { return }
-    }
-	// Why do we special case these...?
-    if prop == "_contentType" {
-        page.contentType = value.(string)
-        return
-    }
-    if prop == "_content" {
-        page.content = value.(string)
-        return
-    }
-    if prop[0] == '_' || prop[0] == '@' {
-        // don't allow any (other) values to be set like this; they
-        // are ours to handle.   We COULD give an error...?
-        return
-    }
-    page.Lock()
+    page.mutex.Lock()
+	modified := false
+	defer page.doneWithLock(&modified)
+	oldValue, exists := page.locked_Get(prop)
+	if exists && oldValue == value {
+		log.Printf("page.Set(%q,%q) doesn't change anything (was %q)", prop, value, oldValue);
+		return
+	}
+	modified = true
+	page.locked_Set(prop, value)
+	//log.Printf("modified=%q", modified)
+}
+
+func (page *Page) locked_Set(prop string, value interface{}) {
+
+	manager, managerExists := page.virtualAppData[prop]
+	if managerExists {
+		manager.Set(value)
+		return
+	} 
+
     if value == nil {
         delete(page.appData, prop)
     } else {
-        if page.appData == nil { page.appData = make(map[string]interface{})}
+        if page.appData == nil { 
+			page.appData = make(map[string]interface{})
+		}
         page.appData[prop] = value
     }
-    page.Unlock()
-    page.touched();
+
     return
 }
 
@@ -270,37 +315,38 @@ func (page *Page) MarshalJSON() (bytes []byte, err error) {
     return json.Marshal(page.AsJSON)
 }
 
+// Return a JSON-able map[] of all the data in the page
 func (page *Page) AsJSON() map[string]interface{} {
     // extra copying for simplicity for now
+    page.mutex.RLock()
     props := page.Properties() 
     m := make(map[string]interface{}, len(props))
-    page.RLock()
     for _, prop := range props {
         value, handled := page.Get(prop)
         if handled { m[prop] = value }
     }
-    page.RUnlock()
+    page.mutex.RUnlock()
     //fmt.Printf("Going to marshal %q for page %q, props %q", m, page, props)
     return m
     //return []byte(""), nil
 }
 
-func (page *Page) OverlayWithJSON(bytes []byte) {
+func (page *Page) locked_OverlayWithJSON(bytes []byte) {
     m := make(map[string]interface{})
     json.Unmarshal(bytes, &m)
-    page.OverlayWithMap(m)
+    page.locked_OverlayWithMap(m)
 }
 
-func (page *Page) OverlayWithMap(m map[string]interface{}) {
+func (page *Page) locked_OverlayWithMap(m map[string]interface{}) {
     for key, value := range m {
-        page.Set(key, value)   // do we need to recurse...?
+        page.locked_Set(key, value)   // do we need to recurse...?
     }
 }
 
-func (page *Page) Zero() {
+func (page *Page) locked_Zero() {
     for _, prop := range page.Properties() {
         if prop[0] != '_' {
-            page.Set(prop, nil)
+            page.locked_Set(prop, nil)
         }
     }
 }
