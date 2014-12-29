@@ -1,3 +1,10 @@
+/*
+
+   please rename this to Site...?
+
+*/
+
+
 package inmem
 
 import (
@@ -15,7 +22,7 @@ type Pod struct {
     cluster       *Cluster
     pages         map[string]*Page
     newPageNumber uint64
-	Listeners PageListenerList
+	Listeners     PageListenerList
 }
 
 
@@ -30,8 +37,6 @@ func (pod *Pod) URL() string {
     return pod.urlWithSlash
 }
 
-//func (pod *Pod) Pages() Selection {
-//}
 
 func (pod *Pod) Pages() (result []*Page) {
     pod.RLock()
@@ -43,7 +48,20 @@ func (pod *Pod) Pages() (result []*Page) {
     return
 }
 
+/* 
+
+Do we want
+
+  Add
+  Remove
+
+of existing pages?     *shrug*
+
+*/
+
+
 func (pod *Pod) NewPage() (page *Page, etag string) {
+	page,_ = NewPage()
     pod.Lock()
     var path string
     for {
@@ -53,12 +71,10 @@ func (pod *Pod) NewPage() (page *Page, etag string) {
             break
         }
     }
-    page = &Page{}
     page.path = path
     page.pod = pod
     etag = page.etag()
     pod.pages[path] = page
-    pod.touched(page)
     pod.Unlock()
     return
 }
@@ -70,18 +86,17 @@ func (pod *Pod) PageByPath(path string, mayCreate bool) (page *Page, created boo
 
     page, _ = pod.pages[path]
     if mayCreate && page == nil {
-        page = &Page{}
+		page,_ = NewPage()
         page.path = path
         page.pod = pod
         pod.pages[path] = page
         created = true
-        pod.touched(page)
 		return
     }
     if mayCreate && page.deleted {
-        page.deleted = false
+		// tiny race condition between this check and undelete...
+        page.Undelete()
         created = true
-        // trusting you'll set the content, and that'll trigger a TOUCHED
 		return
     }
 	if !mayCreate && page != nil && page.deleted {

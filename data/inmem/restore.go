@@ -55,7 +55,7 @@ func (cluster *Cluster) RestoreFrom(src io.Reader) error {
 			
 			page.locked_OverlayWithMap(pmap)
 			
-			page.pageModCount = uint64(pmap["_etag"].(float64))
+			page.modCount = uint64(pmap["_etag"].(float64))
 			
 			lastModString, present := pmap["_lastModified"]
 			if present {

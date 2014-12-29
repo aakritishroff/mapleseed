@@ -141,3 +141,158 @@ func TestIncr1(t *testing.T) {
 	// fmt.Printf(content)
 	if content != "1100" { t.Error("content was", content) }
 }
+
+
+
+/*
+
+BenchmarkSetNoChange	10000000	       205 ns/op
+BenchmarkSetYesChange	 1000000	      1547 ns/op
+BenchmarkSetYesChange2	  500000	      3045 ns/op
+BenchmarkSetYesChange3	  500000	      3029 ns/op
+BenchmarkGetPresent	20000000	           140 ns/op
+BenchmarkGetPresentNoLock	50000000	    42 ns/op
+BenchmarkGetAbsent	20000000	           125 ns/op
+BenchmarkListener	 1000000	          1742 ns/op
+BenchmarkPodNewPage	  500000	          4348 ns/op
+
+I wonder how it would compare if instead each pod were
+a goroutine, so there was no locking...
+
+BenchmarkChannel	 5000000	       506 ns/op
+BenchmarkChannel2	 5000000	       445 ns/op
+
+Ah, no, that's a lot more than the overhead of locking.  Okay,
+I guess we'll live with 100s of ns per operation.  Maybe we'll
+want different granularity....
+
+*/
+
+
+func BenchmarkSetNoChange(b *testing.B) {
+
+	p,_ := NewPage()
+	v := 1;
+	p.Set("a", v)
+
+	for i := 0; i < b.N; i++ {
+		p.Set("a",v)
+	}
+}
+
+func BenchmarkSetYesChange(b *testing.B) {
+	// why does this take 7x as long?
+	// Maybe it's the listeners?
+
+	p,_ := NewPage()
+	v := 1;
+	p.Set("a", v)
+
+	for i := 0; i < b.N; i++ {
+		p.Set("a",i)
+	}
+}
+
+func BenchmarkSetYesChange2(b *testing.B) {
+
+	p,_ := NewPage()
+
+	for i := 0; i < b.N; i++ {
+		p.Set("a",1)
+		p.Set("a",2)
+	}
+}
+func BenchmarkSetYesChange3(b *testing.B) {
+
+	p,_ := NewPage()
+
+	for i := 0; i < b.N; i++ {
+		p.Set("a",1)
+		p.Set("a",2)
+	}
+}
+
+func BenchmarkGetPresent(b *testing.B) {
+
+	p,_ := NewPage()
+	v := 1;
+	p.Set("a", v)
+
+	for i := 0; i < b.N; i++ {
+		_,_ = p.Get("a")
+	}
+}
+func BenchmarkGetPresentNoLock(b *testing.B) {
+
+	p,_ := NewPage()
+	v := 1;
+	p.Set("a", v)
+
+	for i := 0; i < b.N; i++ {
+		_,_ = p.locked_Get("a")
+	}
+}
+
+func BenchmarkGetAbsent(b *testing.B) {
+
+	p,_ := NewPage()
+
+	for i := 0; i < b.N; i++ {
+		_,_ = p.Get("a")
+	}
+}
+
+
+func BenchmarkListener(b *testing.B) {
+
+	l := make(Listener,4)
+	p,_ := NewPage()
+	p.Listeners.Add(l)
+
+	for i := 0; i < b.N; i++ {
+		p.Set("a",i)
+		if p != <- l {
+			b.Error()
+		}
+	}
+}
+
+func echo(to, from chan string) {
+	for {
+		message := <- to
+		if message == "" {
+			return
+		}
+		from <- message
+	}
+}
+
+func BenchmarkChannel(b *testing.B) {
+
+	to := make(chan string)
+	from := make(chan string)
+
+	go echo(to, from)
+
+	for i := 0; i < b.N; i++ {
+		to <- "hello world!"
+		_ = <- from
+	}
+	to <- ""
+}
+
+func BenchmarkChannel2(b *testing.B) {
+
+	to := make(chan string, 2)
+	from := make(chan string, 2)
+
+	go echo(to, from)
+
+	for i := 0; i < b.N; i+=2 {
+		to <- "hello world!"
+		to <- "hello world!"
+		_ = <- from		
+		_ = <- from
+	}
+	to <- ""
+}
