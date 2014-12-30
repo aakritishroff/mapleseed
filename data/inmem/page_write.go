@@ -3,6 +3,7 @@ package inmem
 import (
     "encoding/json"
 	"time"
+	"../slowclock"
 )
 
 
@@ -25,24 +26,15 @@ func (page *Page) doneWithLock(startingMod uint64) {
 
 	modified := startingMod != page.modCount
 
-	if modified {
-		// this is fairly expensive.   On a single property
-		// change, it blows it up from 350ns to 1500ns.
-		// We could have a time variable that's updated 1000x
-		// per second and incremented at every read, or something,
-		// if this starts to matter.   Or maybe we don't even need
-		// it incremented.  We could simply have a timestamp of
-		// the last significant I/O operation (eg web request) and
-		// and use that for all related data changes.
-		//
-		// like a "cluster.getCurrentTime()" or something, which is
-		// updated by someone, sometimes.
-		page.lastModified = time.Now().UTC()
-	}
-
 	page.mutex.Unlock()
 
 	if modified {
+		// we use slowclock.Now() instead of time.Now() because
+		// (1) we don't want app developers relying on this for timing, and
+		// (2) using time.Now() was a huge slowdown.  This change increases
+		// single-property write speed by nearly 4x in simple benchmark.
+		page.lastModified = slowclock.Now().UTC()
+
 		page.Listeners.Notify(page);
 		if page.pod != nil {
 			page.pod.touched(page)
