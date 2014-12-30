@@ -68,7 +68,7 @@ func (page *Page) WaitForNoneMatch(etag string) {
         page.mutex.RUnlock()
         return
     }
-    ch := make(chan *Page)
+    ch := make(chan interface{})
 	page.Listeners.Add(ch)
 	page.mutex.RUnlock()
 	_ = <- ch
@@ -163,3 +163,7 @@ func (page *Page) AsJSON() map[string]interface{} {
     //return []byte(""), nil
 }
 
+// so that we can access this via an interface
+func (page *Page) AddListener(l chan interface{}) {
+	page.Listeners.Add(l)
+}

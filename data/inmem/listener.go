@@ -4,7 +4,7 @@ import (
 	"sync"
 )
 
-type Listener chan *Page;
+type Listener chan interface{};
 
 type PageListenerList struct {
 	mutex          sync.Mutex // public functions are threadsafe
