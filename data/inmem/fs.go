@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"log"
 	"strconv"
+	"io/ioutil"
 )
 
 // FSBind mirrors the data to/from a directory in the filesystem
@@ -210,9 +211,18 @@ func (page *Page) save() error {
 
 
 
-func (pod *Pod) createOnDisk() {
-	if pod.cluster.fsroot != "" {
+func (pod *Pod) save() {
+	if pod.cluster != nil && pod.cluster.fsroot != "" {
 		err := os.MkdirAll(pod.filename(), 0700)
+		if err != nil {
+			if os.IsExist(err) {
+				// pass
+			} else {
+				panic(err)
+			}
+		}
+		pwfile := pod.filename() + "/pw"
+		err = ioutil.WriteFile(pwfile, pod.pwHash, 0600)
 		if err != nil {
 			panic(err)
 		}
@@ -275,17 +285,18 @@ func (cluster *Cluster) recreatePodsFromDisk() {
 		panic(err)
 	}
 	for _,name := range names {
-		pod := &Pod{}
-		pod.cluster = cluster
+
 		realname,err := url.QueryUnescape(name)
 		url := "http://"+realname+"/"
 		if err != nil {
 			panic(err)
 		}
-		pod.urlWithSlash = url
-		pod.pages = make(map[string]*Page)
-		pod.rootPage,_ = pod.PageByPath("", true)
-		cluster.pods[url] = pod
+		pod := NewPod(url)
+		pod.pwHash, err = ioutil.ReadFile(pod.filename()+"/pw")
+		if err != nil {
+			panic(err)
+		}
+		cluster.AddPod(pod)
 		log.Printf("restored pod %q from disk", name)
 	}
 }

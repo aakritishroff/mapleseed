@@ -7,6 +7,7 @@ import (
     "log"
     "strings"
     "sync"
+	"errors"
 )
 
 type Cluster struct {
@@ -85,31 +86,31 @@ func (cluster *Cluster) Pods() (result []*Pod) {
     return
 }
 
-func (cluster *Cluster) NewPod(url string) (pod *Pod, existed bool) {
-	//log.Printf("pods: %q", cluster.pods)
-    if pod, existed = cluster.pods[url]; existed {
-        return
-    }
-    pod = &Pod{}
-    pod.cluster = cluster
-	pod.fullyLoaded = true
-	if !strings.HasSuffix(url, "/") {
-		// or should we flag an error?   eh, this seems okay.
-		url = url+"/"
-	}
-	pod.urlWithSlash = url
-    pod.pages = make(map[string]*Page)
-    existed = false
-	pod.rootPage,_ = pod.PageByPath("", true)
-	pod.rootPage.Set("_isPod", true)
-	// fill in more about the user....?
+var NameAlreadyTaken = errors.New("URL already taken");
 
+func (cluster *Cluster) AddPod(pod *Pod) error {
+
+	log.Printf("2000")
     cluster.lock()
     defer cluster.unlock()
+
+	log.Printf("2001")
+	url := pod.URL()
+    if _, existed := cluster.pods[url]; existed {
+		log.Printf("2005")
+		return NameAlreadyTaken
+    }
+
+	log.Printf("2010")
+	// use a SetClusterPointer() to pod can be an interface?
+	// ... except that might might folks think it's safe to
+	// mess with...
+    pod.cluster = cluster
+
     cluster.pods[url] = pod
-    cluster.clusterTouched(pod.rootPage)
-	pod.createOnDisk()
-    return
+    cluster.clusterTouched(pod.rootPage)   // FIXME really should be ALL PAGES
+	pod.save()
+    return nil
 }
 
 func (cluster *Cluster) PodByURL(url string) (pod *Pod) {

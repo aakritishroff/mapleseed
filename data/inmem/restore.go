@@ -44,9 +44,10 @@ func (cluster *Cluster) RestoreFrom(src io.Reader) error {
 			}
 			// userName := m[2]
 			path := m[3]
-			pod,_ := cluster.NewPod(podId)
-			if pod == nil {
-				return errors.New("failed to build pod: "+podId)
+			pod := NewPod(podId)
+			err := cluster.AddPod(pod)
+			if err != nil {
+				return errors.New("failed to build add: "+podId)
 			}
 			page,created := pod.PageByPath(path, true)
 			if !created {

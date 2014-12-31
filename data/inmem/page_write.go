@@ -38,7 +38,11 @@ func (page *Page) doneWithLock(startingMod uint64) {
 		page.Listeners.Notify(page);
 		if page.pod != nil {
 			page.pod.touched(page)
-			page.clusterModCount = page.pod.cluster.modCount
+			if page.pod.cluster != nil {
+				// I'd like to remove this hack soon....  needed by
+				// current query infrastructure
+				page.clusterModCount = page.pod.cluster.modCount
+			}
 		}
 	}
 }
