@@ -23,13 +23,14 @@ type Pod struct {
     pages         map[string]*Page
     newPageNumber uint64
 	Listeners     PageListenerList
+	fullyLoaded   bool  // no pages still on disk
 }
 
 
 func (pod *Pod) touched(page *Page) {
 	pod.Listeners.Notify(page);
     if pod.cluster != nil {
-		pod.cluster.clusterTouched()
+		pod.cluster.clusterTouched(page)
 	}
 }
 
@@ -39,6 +40,7 @@ func (pod *Pod) URL() string {
 
 
 func (pod *Pod) Pages() (result []*Page) {
+	pod.loadAllPages()
     pod.RLock()
     result = make([]*Page, 0, len(pod.pages))
     for _, k := range pod.pages {
@@ -47,6 +49,8 @@ func (pod *Pod) Pages() (result []*Page) {
     pod.RUnlock()
     return
 }
+
+
 
 /* 
 
@@ -67,9 +71,15 @@ func (pod *Pod) NewPage() (page *Page, etag string) {
     for {
         path = fmt.Sprintf("a%d", pod.newPageNumber)
         pod.newPageNumber++
-        if _, taken := pod.pages[path]; !taken {
-            break
+        if _, taken := pod.pages[path]; taken {
+			continue
         }
+		if !pod.fullyLoaded {
+			if pod.pathTakenOnDisk(path) {
+				continue
+			}
+		}
+		break
     }
     page.path = path
     page.pod = pod
@@ -82,9 +92,23 @@ func (pod *Pod) PageByPath(path string, mayCreate bool) (page *Page, created boo
     pod.Lock()
 	defer pod.Unlock()
 
-	// fmt.Printf("pagebypath: %s", path);
+	//log.Printf("pagebypath: %s", path);
 
     page, _ = pod.pages[path]
+	if page == nil {
+		page,_ = NewPage()
+		page.path = path
+		page.pod = pod
+		//log.Printf("pagebypath trying load: %s", path);
+		loaded, err := page.load()
+		if loaded {
+			pod.pages[path] = page
+			return
+		} 
+		if err != nil {
+			panic(err)
+		}
+	}
     if mayCreate && page == nil {
 		page,_ = NewPage()
         page.path = path
@@ -113,3 +137,4 @@ func (pod *Pod) PageByURL(url string, mayCreate bool) (page *Page, created bool)
     path := url[len(pod.urlWithSlash):]
     return pod.PageByPath(path, mayCreate)
 }
+

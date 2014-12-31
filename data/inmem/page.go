@@ -26,7 +26,9 @@ type Page struct {
 	clusterModCount uint64
 
     modCount   uint64
+	lastSaved  uint64  // modCount when this was last safely on disk
 	lastModified   time.Time
+
 
 	// Pages can be delete, which is different from being removed from
 	// a Site, in some subtle ways, maybe?   Like maybe we keep access control

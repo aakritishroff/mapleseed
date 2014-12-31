@@ -22,14 +22,21 @@ func Test_Via_JS(t *testing.T) {
 
 	// make port a parameter instead of hardcoding 8090?
 
-	logfile, err := os.OpenFile("Test_Via_JS.log", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0611)
+	// logfile, err := os.OpenFile("Test_Via_JS.log", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0611)
+	logfile, err := os.Create("Test_Via_JS.log")
 	if err != nil {
 		panic(err)
 	}
 	log.SetOutput(logfile)
 
 	hubURL := "http://localhost:8090/service"
-	cluster := db.NewInMemoryCluster(hubURL)
+	cluster := db.NewInMemoryCluster()
+
+	// nice to be able to see what's written, I think...
+	testDir := "./Test_Via_JS.pages"
+	os.RemoveAll(testDir) // but don't carry over data, thanks
+	cluster.FSBind(testDir)
+
 	cluster.PodURLTemplate = "http://localhost:8090/pod/%s"
 	cluster.HubURL = hubURL
 	go serve(cluster, ":8090")

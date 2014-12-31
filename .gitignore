@@ -2,4 +2,7 @@
 OLD/
 mapleseed
 .js-test-area/
+Test_Via_JS*
 *.log
+data/inmem/.fsbind-test
+_*

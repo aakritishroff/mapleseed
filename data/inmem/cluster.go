@@ -1,18 +1,41 @@
 package inmem
 
+// call this "webview" maybe?
+
+
 import (
-    //"log"
+    "log"
     "strings"
     "sync"
 )
 
+type Cluster struct {
+    // Page
+	mutex          sync.RWMutex // public functions are threadsafe
+    pods map[string]*Pod
 
-func (cluster *Cluster) clusterTouched() {
+	Listeners PageListenerList
+
+	PodURLTemplate string
+	HubURL string
+    url  string // which should be the same as URL(), but that's recursive
+    modCount uint64
+    modlock sync.RWMutex   // just used to lock modCount
+    modified *sync.Cond
+	fsroot string
+	queueForFSB Listener
+}
+
+
+
+func (cluster *Cluster) clusterTouched(page *Page) {
     cluster.modlock.Lock()
     cluster.modCount++
     cluster.modlock.Unlock()
     cluster.modified.Broadcast()
+	cluster.Listeners.Notify(page)
 }
+
 func (cluster *Cluster) WaitForModSince(ver uint64) {
     //log.Printf("WaitForModSince %d %d 1", ver, cluster.modCount);
     // this should work with rlock, but it doesn't
@@ -32,21 +55,6 @@ func (cluster *Cluster) WaitForModSince(ver uint64) {
 }
 
 
-type Cluster struct {
-    // Page
-	mutex          sync.RWMutex // public functions are threadsafe
-    pods map[string]*Pod
-
-	Listeners PageListenerList
-
-	PodURLTemplate string
-	HubURL string
-    url  string // which should be the same as URL(), but that's recursive
-    modCount uint64
-    modlock sync.RWMutex   // just used to lock modCount
-    modified *sync.Cond
-}
-
 func (cluster *Cluster) ModCount() uint64 {
     // FIXME in theory should do a rlock, in case the increment is not atomic
     cluster.modlock.Lock()
@@ -56,12 +64,12 @@ func (cluster *Cluster) ModCount() uint64 {
 
 // The URL is the nominal URL of the cluster itself.  It does
 // not have to be syntactically related to its pod URLs
-func NewInMemoryCluster(url string) (cluster *Cluster) {
+//////func NewInMemoryCluster(url string) (cluster *Cluster) {
+func NewInMemoryCluster() (cluster *Cluster) {
     cluster = &Cluster{}
-    cluster.url = url
+    // cluster.url = url
     cluster.pods = make(map[string]*Pod)
     cluster.modified = sync.NewCond(&cluster.modlock)
-
     // and as a page?
     // leave that stuff zero for now
     return
@@ -78,11 +86,13 @@ func (cluster *Cluster) Pods() (result []*Pod) {
 }
 
 func (cluster *Cluster) NewPod(url string) (pod *Pod, existed bool) {
+	//log.Printf("pods: %q", cluster.pods)
     if pod, existed = cluster.pods[url]; existed {
         return
     }
     pod = &Pod{}
     pod.cluster = cluster
+	pod.fullyLoaded = true
 	if !strings.HasSuffix(url, "/") {
 		// or should we flag an error?   eh, this seems okay.
 		url = url+"/"
@@ -97,7 +107,8 @@ func (cluster *Cluster) NewPod(url string) (pod *Pod, existed bool) {
     cluster.lock()
     defer cluster.unlock()
     cluster.pods[url] = pod
-    cluster.clusterTouched()
+    cluster.clusterTouched(pod.rootPage)
+	pod.createOnDisk()
     return
 }
 
@@ -119,6 +130,7 @@ func (cluster *Cluster) PageByURL(url string, mayCreate bool) (page *Page, creat
             return
         }
     }
+	log.Printf("can't do PageByURL -- no suitable pod: %q:", url)
     return
 }
 
@@ -134,4 +146,10 @@ func (cluster *Cluster) lock() {
 }
 func (cluster *Cluster) unlock() {
 	cluster.mutex.Unlock()
+}
+
+
+// so that we can access this via an interface
+func (cluster *Cluster) AddListener(l chan interface{}) {
+	cluster.Listeners.Add(l)
 }

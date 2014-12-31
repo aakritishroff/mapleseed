@@ -54,7 +54,7 @@ func main() {
 		log.SetOutput(logfile)
 	}
 
-	cluster := db.NewInMemoryCluster(*hubURL)
+	cluster := db.NewInMemoryCluster()
 	cluster.PodURLTemplate = *argPodURLTemplate
 	cluster.HubURL = *hubURL
 

@@ -147,8 +147,14 @@ func (page *Page) MarshalJSON() (bytes []byte, err error) {
     return json.Marshal(page.AsJSON)
 }
 
-// Return a JSON-able map[] of all the data in the page
+// Return a JSON-able map[] of all the data in the page, no modcount
 func (page *Page) AsJSON() map[string]interface{} {
+	result,_ := page.AsJSONWithModCount()
+	return result
+}
+
+// Return a JSON-able map[] of all the data in the page
+func (page *Page) AsJSONWithModCount() (map[string]interface{}, uint64) {
     // extra copying for simplicity for now
     page.mutex.RLock()
     props := page.Properties() 
@@ -157,9 +163,10 @@ func (page *Page) AsJSON() map[string]interface{} {
         value, handled := page.Get(prop)
         if handled { m[prop] = value }
     }
+	modCount := page.modCount
     page.mutex.RUnlock()
     //fmt.Printf("Going to marshal %q for page %q, props %q", m, page, props)
-    return m
+    return m, modCount
     //return []byte(""), nil
 }
 
