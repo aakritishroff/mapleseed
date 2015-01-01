@@ -32,8 +32,8 @@ func (page *Page) URL() string {
 func (page *Page) Content(accept []string) (contentType string, content string, etag string) {
     page.mutex.RLock()
 	defer page.mutex.RUnlock()
-    ct, typeExists := page.Get("contentType")
-    c, contentExists := page.Get("content")
+    ct, typeExists := page.NakedGet("contentType")
+    c, contentExists := page.NakedGet("content")
     etag = page.etag()
 	if typeExists && contentExists {
 		contentType = ct.(string)

@@ -8,7 +8,6 @@
 package inmem
 
 import (
-    //"log"
     "fmt"
     "sync"
 	"strings"
@@ -128,15 +127,18 @@ func (pod *Pod) uniquePath() (path string) {
 	return
 }
 
-func (pod *Pod) NewPage() (page *Page, etag string) {
-	page,_ = NewPage()
+func (pod *Pod) NewPage(data ...map[string]interface{}) (page *Page, etag string) {
+	page,_ = NewPage(data...)
     pod.Lock()
-    defer pod.Unlock()
     var path string
     page.path = pod.uniquePath()
     page.pod = pod
     etag = page.etag()
     pod.pages[path] = page
+
+	pod.Unlock()
+
+	pod.touched(page)
     return
 }
 
@@ -201,17 +203,4 @@ func (pod *Pod) PageByURL(url string, mayCreate bool) (page *Page, created bool)
 // so that we can access this via an interface
 func (pod *Pod) AddListener(l chan interface{}) {
 	pod.Listeners.Add(l)
-}
-
-// PushNew combines NewPage and SetProperties into an atomic unit
-func (pod *Pod) PushNew(data map[string]interface{}) {
-	page,_ := NewPageData(data)
-    pod.Lock()
-    var path string
-    page.path = pod.uniquePath()
-    page.pod = pod
-    pod.pages[path] = page
-    pod.Unlock()
-	page.pod.touched(page)
-    return
 }

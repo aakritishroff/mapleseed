@@ -43,7 +43,7 @@ type Pod interface {
 	AddListener(chan interface{})
 	// I still don't quite grok interfaces.  I want this to be returning
 	// a Page, but I can't...
-	NewPage() (*inmem.Page, string)  
+	NewPage(data ...map[string]interface{}) (*inmem.Page, string)  
 }
  
 func NewPod(url string) *inmem.Pod {

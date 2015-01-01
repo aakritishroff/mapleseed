@@ -311,18 +311,43 @@ func incrementer(page Page,times int,sleep time.Duration,wg *sync.WaitGroup,id i
 	//fmt.Printf("done\n");
 }
 
-func TestIncr1(t *testing.T) {
+func TestIncr(t *testing.T) {
+	incr(t, 25, 25)
+}
+
+// these two will differ if the scaling isn't linear with amount
+// of contention.  ANd it's not, of course.
+
+// How long does it take to each increment a location once, with contention
+func BenchmarkIncrByRevs(b *testing.B) {
+	incr(b, 10, b.N/10)
+}
+
+// How long does it take to each increment a location once, with contention
+func BenchmarkIncrByBots(b *testing.B) {
+	incr(b, b.N/10, 10)
+}
+
+type errorer interface {
+	Error(...interface{})
+}
+
+func incr(t errorer, bots, revs int) {
+
 	page,_ := NewPage("inmem")
-	_,_ = page.SetContent("", "1000", "")
+	_,_ = page.SetContent("", "0", "")
 	var wg sync.WaitGroup
-	for i:=0; i<10; i++ {
+	for i:=0; i<bots; i++ {
 		wg.Add(1)
-		go incrementer(page,10,10*time.Microsecond,&wg,i)
+		go incrementer(page,revs,0*time.Microsecond,&wg,i)
 	}
 	wg.Wait()
 	_,content,_ := page.Content([]string{})
 	// fmt.Printf(content)
-	if content != "1100" { t.Error("content was", content) }
+	contentNum,err := strconv.ParseUint(content, 10, 64)
+	if err != nil || contentNum  != uint64(bots*revs) { 
+		t.Error("content was", content) 
+	}
 }
 
 

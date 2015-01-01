@@ -2,11 +2,12 @@ package inmem
 
 //
 //    BIG PROBLEM:    if people don't make their listener channel
-//    big enough, we can block on notify.   Should this be done in
-//    a go-routine?
+//    big enough, we can block on notify.   It could even be a deadlock,
+//    I think....    (as seen in BenchmarkWhamChan)
 //
 import ( 
 	"sync"
+	//"log"
 )
 
 type Listener chan interface{}
@@ -48,9 +49,14 @@ func (pll *PageListenerList) Notify(page *Page) {
 	copy(snapshot, pll.listeners)
 	pll.mutex.Unlock()
 	//log.Printf("notifying... 2")
-	for _,l := range snapshot {
-		//log.Printf("notifying... 3 %q", i)
-		l <- page
-	}
-	//log.Printf("notifying... 4")
+
+	// put this in a goroutine so it's okay if send blocks
+	// (it basically gives us elastic channels)
+	go func() {
+		for _,l := range snapshot {
+			//log.Printf("notifying listener %d of %s", i, page.URL())
+			l <- page
+		}
+		//log.Printf("notifying... 4")
+	}()
 }

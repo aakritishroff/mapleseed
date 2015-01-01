@@ -7,16 +7,19 @@ import (
 )
 
 
-func NewPage() (page *Page, etag string) {
-	return NewPageData(make(map[string]interface{}))
-}
-func NewPageData(data map[string]interface{}) (page *Page, etag string) {
+func NewPage(data ...map[string]interface{}) (page *Page, etag string) {
 	page = &Page{}
     page.path = ""
     page.pod = nil
     etag = page.etag()
 	page.lastModified = slowclock.Now().UTC()
-	page.appData = data
+	if len(data) == 0 {
+		page.appData = make(map[string]interface{})
+	} else if len(data) == 1 {
+		page.appData = data[0]
+	} else {
+		panic("too many arguments to NewPage")
+	}
     return
 }
 
