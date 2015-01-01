@@ -106,35 +106,43 @@ func Create(act Act, options CreationOptions) {
 	log.Printf("now  %q", page.Properties())
 
 	act.Result(JSON{"_id": page.URL(), "_etag": etag})
+	val, ok := page.Get("isPublic")
+	if !ok { //if property not set, add owner to readers.
+		createACL(page, act.UserId(), false) //creates private ACL.
+	} else {
+		if val.(bool) == false {
+			createACL(page, act.UserId(), false) //add owner to readers
+		}
+	}
 
 	/*
-	      ADD:
-	           act.tmpIdMap()
+		      ADD:
+		           act.tmpIdMap()
 
-	           and allow ids like  tmp:whatever
-	           which get replaced (skolemized) during create,
-	              so you can send graphs, and send related
-	              resources in a pipeline, without RTT for each
+		           and allow ids like  tmp:whatever
+		           which get replaced (skolemized) during create,
+		              so you can send graphs, and send related
+		              resources in a pipeline, without RTT for each
 
 
-		log.Printf("in.Data[_id]", in.Data["_id"])
-		urlintf := in.Data["_id"]
-		var page *db.Page
-		if urlintf == nil {
-			page = act.pod.NewPage()
-		} else {
-			url := urlintf.(string)
-			podurl := url [:len(act.pod.URL())]
-			log.Printf("podurl %q, url %q , path %q", act.pod.URL(),
-				url, url[len(act.pod.URL()):])
-			if act.pod.URL() == podurl {
-				page,_ = act.pod.PageByURL(url, true)
+			log.Printf("in.Data[_id]", in.Data["_id"])
+			urlintf := in.Data["_id"]
+			var page *db.Page
+			if urlintf == nil {
+				page = act.pod.NewPage()
 			} else {
-				act.Send(Message{in.Seq, "fail", JSON{"err":"requested prefix is in the wrong web space: "+url+" doesnt start with "+podurl}});
-				return
+				url := urlintf.(string)
+				podurl := url [:len(act.pod.URL())]
+				log.Printf("podurl %q, url %q , path %q", act.pod.URL(),
+					url, url[len(act.pod.URL()):])
+				if act.pod.URL() == podurl {
+					page,_ = act.pod.PageByURL(url, true)
+				} else {
+					act.Send(Message{in.Seq, "fail", JSON{"err":"requested prefix is in the wrong web space: "+url+" doesnt start with "+podurl}});
+					return
+				}
 			}
-		}
-		act.Send(Message{in.Seq, "ok", JSON{"_id":page.URL()}});
+			act.Send(Message{in.Seq, "ok", JSON{"_id":page.URL()}});
 
 	*/
 }
@@ -144,6 +152,10 @@ func Read(act Act, url string) {
 	page, _ := act.Cluster().PageByURL(url, false)
 	if page == nil {
 		act.Error(404, "page not found", JSON{})
+		return
+	}
+	if !isReadable(act.UserId(), page) {
+		act.Error(550, "Permission Denied. Not in list of page's readers", JSON{})
 		return
 	}
 	act.Result(page.AsJSON())
