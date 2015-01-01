@@ -10,6 +10,15 @@ Web and for real-time data sync.
 
 Might be called DatapageNetworkAPI or something like that.
 
+
+Should probably be redone as one function, run, which takes an Act and
+an Op, where there are different kinds of Ops, each encoding all the
+parameters we want.  Like CreationOptions, etc.    So you create an op,
+then you run it.   Maybe that's a .run(act) method.
+
+Not sure how to do optional parameters.  Maybe use []byte instead of
+string, since it can be nil?   Or just *string.
+
 */
 
 package op
@@ -19,6 +28,8 @@ import (
 	"fmt"
 	"log"
 	"regexp"
+	// "fmt"
+	db "../data/inmem"
 )
 
 type JSON map[string]interface{}
@@ -58,22 +69,27 @@ func init() {
 	validPodname = regexp.MustCompile("^[a-z][a-z0-9]*$")
 }
 
-func CreatePod(act Act, name string) {
+func CreatePod(act Act, podurl, password string) {
 
-	log.Printf("createPod %q", name)
-	if validPodname.MatchString(name) {
-		podurl := fmt.Sprintf(act.Cluster().PodURLTemplate, name)
-		pod, existed := act.Cluster().NewPod(podurl) // HANGS, some lock
-		if existed {
-			log.Printf("Pod name %q already taken by %q", name, podurl)
-			Error1(act, "Pod name already taken")
-		} else {
-			log.Printf("created pod %s", pod.URL())
-			act.Result(JSON{"_id": pod.URL()})
-		}
+	log.Printf("createPod %q", podurl)
+	//if validPodname.MatchString(name) {
+	//	podurl := fmt.Sprintf(act.Cluster().PodURLTemplate, name)
+
+	pod := db.NewPod(podurl)
+	err := act.Cluster().AddPod(pod)
+	if err == db.NameAlreadyTaken {
+		Error1(act, "Pod name already taken")
+	} else if err != nil {
+		Error1(act, "Unknown error")
 	} else {
-		Error1(act, "Invalid pod name syntax")
+		pod.SetPassword(password)
+		log.Printf("created pod %s", pod.URL())
+		act.Result(JSON{"_id": pod.URL()})
 	}
+
+	//} else {
+	//		Error1(act, "Invalid pod name syntax")
+	//	}
 }
 
 // if options are not specified, they'll have "zero" values

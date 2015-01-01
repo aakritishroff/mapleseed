@@ -12,6 +12,9 @@ import (
 type JSON map[string]interface{}
 
 func (cluster *Cluster) RestoreFrom(src io.Reader) error {
+	cluster.lock()   // no one better touch anything while we're doing this!
+	defer cluster.unlock()
+
 	dec := json.NewDecoder(src)
 	var v JSON
 	if err := dec.Decode(&v); err != nil {
@@ -41,18 +44,19 @@ func (cluster *Cluster) RestoreFrom(src io.Reader) error {
 			}
 			// userName := m[2]
 			path := m[3]
-			pod,_ := cluster.NewPod(podId)
-			if pod == nil {
-				return errors.New("failed to build pod: "+podId)
+			pod := NewPod(podId)
+			err := cluster.AddPod(pod)
+			if err != nil {
+				return errors.New("failed to build add: "+podId)
 			}
 			page,created := pod.PageByPath(path, true)
 			if !created {
 				return errors.New("page already existed: "+id)
 			}
 			
-			page.OverlayWithMap(pmap)
+			page.locked_OverlayWithMap(pmap)
 			
-			page.pageModCount = uint64(pmap["_etag"].(float64))
+			page.modCount = uint64(pmap["_etag"].(float64))
 			
 			lastModString, present := pmap["_lastModified"]
 			if present {

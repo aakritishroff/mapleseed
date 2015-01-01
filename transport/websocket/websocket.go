@@ -109,7 +109,16 @@ func handler(cluster *db.Cluster, ws *websocket.Conn) {
 
 	nextSeq := 0
 	userId := ""
-	var pod *db.Pod
+	var userPod *db.Pod
+	var thisPod *db.Pod
+
+	// figure out thisPod by looking at the URL
+
+	log.Printf("websocket url?  %q", ws.Request().URL.String())
+	log.Printf("websocket url?  %q", ws.Request().URL.Scheme)
+	log.Printf("websocket url?  %q", ws.Request().URL.Host)
+	log.Printf("websocket url?  %q", ws.LocalAddr)
+	log.Printf("websocket url?  %q", ws.RemoteAddr)
 
 	for {
 		in := InMessage{nextSeq, "nop", nil}
@@ -123,7 +132,7 @@ func handler(cluster *db.Cluster, ws *websocket.Conn) {
 		nextSeq = in.Seq + 1
 		log.Printf("Received: %q\n", in)
 
-		act := &WSAct{ws, in.Seq, pod, cluster, userId, false}
+		act := &WSAct{ws, in.Seq, thisPod, cluster, userId, false}
 
 		/*
 			var url string
@@ -142,16 +151,46 @@ func handler(cluster *db.Cluster, ws *websocket.Conn) {
 		switch in.Op {
 		case "login":
 
-			// Later on, we'll require a token obtained via a direct channel
+			userId, _ = in.Data["userId"].(string)
+			password, _ := in.Data["password"].(string)
 
-			// for now, we basically treat the userId (user pod url) as
-			// an opaque string!   (I think...)
+			log.Printf("1 %q %q", userId, password)
+			userPod = cluster.PodByURL(userId)
+			if userPod == nil {
+				log.Printf("2 %q", userPod)
+				// if pw is nil, then assume this is a <0.2.0 client
+				// and for now allow implicit creatione
+				if password == "" {
+					userPod = db.NewPod(userId)
+					log.Printf("3 %q", userPod)
+					err := cluster.AddPod(userPod)
+					log.Printf("4 %q", err)
+					// we know the name wasn't taken, per above
+					if err != nil {
+						panic(err)
+					}
+					log.Printf("5 %q", userPod)
+				} else {
+					act.Error(404, "No such user", op.JSON{})
+					userId = ""
+				}
+			} else {
+				log.Printf("100 %q", userPod)
+				if userPod.HasPassword(password) {
+					log.Printf("login worked for %s", userId)
+				} else {
+					act.Error(401, "Incorrect Password", op.JSON{})
+					userPod = nil
+					userId = ""
+				}
+			}
+			log.Printf("1000 %q", userPod)
 
-			userId = in.Data["userId"].(string)
-			pod, _ = cluster.NewPod(userId)
-			log.Printf("logged in %s", userId)
-			log.Printf("pod URL is %s", pod.URL())
-			act.Result(nil)
+			log.Printf("logged in %q", userId)
+			if userPod != nil {
+				log.Printf("userPod URL is %s", userPod.URL())
+				act.Result(nil)
+			}
 
 		case "whoami":
 			log.Printf("still logged in %s", userId)
@@ -159,7 +198,8 @@ func handler(cluster *db.Cluster, ws *websocket.Conn) {
 
 		case "createPod":
 			name, _ := in.Data["name"].(string)
-			op.CreatePod(act, name)
+			password, _ := in.Data["password"].(string)
+			op.CreatePod(act, name, password)
 
 		case "create":
 			options := op.CreationOptions{}
