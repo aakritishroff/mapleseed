@@ -13,6 +13,7 @@ type VirtualValue interface {
 }
 
 type Page struct {
+	notifier
 
 	// public functions are threadsafe
     mutex          sync.RWMutex 

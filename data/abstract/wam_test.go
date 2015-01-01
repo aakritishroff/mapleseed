@@ -1,16 +1,31 @@
 package abstract
 
-/* 
-
-  This version does it's own queries, instead of using the query library
-
-  FOR NOW.
-
-*/
-
 import (
 	"testing"
+	"log"
 )
+
+// shared with other benchmark files
+const whamNumPlayers = 1
+
+
+func trace(template string, args ...interface{}) {
+	if false {
+		log.Printf(template, args...)
+	}
+}
+
+func BenchmarkWhackAMole(b *testing.B) {
+	WhackAMole(b.N)
+}
+
+func TestWhackAMole(t *testing.T) {
+	//WhackAMole(300000)   //  about 10k per sec
+	WhackAMole(1000)   //  about 10k per sec
+}
+
+
+
 
 func maybeReply(pod Pod, page Page, n int) {
 	if page.GetDefault("isMole", false).(bool) {
@@ -19,97 +34,79 @@ func maybeReply(pod Pod, page Page, n int) {
 }
 
 func reply(pod Pod, page Page, n int) {
-	//log.Printf("player %02d got mole", n)
+	trace("player %02d saw mole", n)
 	pg,_ := pod.NewPage()
-	pg.Set("moleSeen", page.URL())
+	trace("player %02d created reply page %q", n, pg.URL())
 	pg.Set("seenBy", n)
-	//log.Printf("player %02d replied %q", n, pg.URL())
+	trace("player %02d set seenBy on %q", n, pg.URL())
+	pg.Set("moleSeen", page.URL())
+	trace("player %02d replied %q", n, pg.URL())
 }
 
-func runPlayer(pod Pod, n int) chan bool {
+func runPlayer(stop chan struct{}, pod Pod, n int) {
 
-	stopchan := make(chan bool)
-	listener := make(chan interface{},100)
-	pod.AddListener(listener)
+	cb := func(pagei interface{}) {
+		trace("player %02d saw something", n)
+		page := pagei.(Page)
+		maybeReply(pod, page, n) 
+	}
+	pod.AddCallback(&cb)
+	trace("player %02d active", n)
 
-	go func() {
-		for {
-			select {
-			case _ = <- stopchan:
-				//log.Printf("player %02d got stop", n)
-				return
-			case pageEvent := <- listener:
-				// is this page a mole?  if so, post our own
-				page := pageEvent.(Page)
-				//log.Printf("player %02d heard %q", n, page.URL())
-				maybeReply(pod, page, n) 
-			}
-		}
-	}()
-	return stopchan
 }
 
 // at some point, the players and the moles should be on different
 // pods, connected by the social graph!
 
-func BenchmarkWhackAMole(b *testing.B) {
-	WhackAMole(b.N)
-}
-
-func TestWhackAMole(t *testing.T) {
-	WhackAMole(1)   //  about 10k per sec
-}
-
 func WhackAMole(N int) {
-
-	numPlayers := 5
 
 	w := NewWebView()
 
 	pod := NewPod("http://example.com/")
 	w.AddPod(pod)
 
-	score := make([]int, numPlayers)
-	stop := make([]chan bool, numPlayers)
-	for p:=0; p<numPlayers; p++ {
-		stop[p] = runPlayer(pod, p)
+	score := make([]int, whamNumPlayers)
+	stop := make(chan struct{})
+	for p:=0; p<whamNumPlayers; p++ {
+		runPlayer(stop, pod, p)
 	}
 
-	// we could run moles in parallel by writing "go" to a channel N
-	// times, and letting them race to see who gets it, and pausing
-	// when too many are outstanding.  When the channel is closed,
-	// they exit.
+	var currentMole Page
 
-	listener := make(chan interface{},100)
-	pod.AddListener(listener)
-
-	for i := 0; i < N; i++ {
-		pg,_ := pod.NewPage()
-		pg.Set("isMole", true)	
-		//log.Printf("MOLE UP %s", pg.URL())
-		// by the time we regain control, it's probably
-		// been whacked by all the players
-		for {
-			found := <- listener
-			page := found.(Page)
-			if url,ok := page.Get("moleSeen"); ok {
-				if url == pg.URL() {
-					//log.Printf("MOLE SEEN")
-					pg.Delete()
-					seenBy := page.GetDefault("seenBy", -1).(int)
-					//log.Printf("... BY %d", seenBy)
-					score[seenBy]++
-					break
+	cb := func(pagei interface{}) {
+		page := pagei.(Page)
+		trace("Mole notices %q", page.URL()) 
+		if url,ok := page.Get("moleSeen"); ok {
+			trace("Some mole was seen")
+			if url == currentMole.URL() {
+				trace("THIS MOLE SEEN")
+				currentMole.Delete()
+				trace("DELETED")
+				seenBy,ok := page.GetDefault("seenBy", -1).(int)
+				if !ok {
+					panic("seenBy failed")
 				}
+				trace("SEEN BY %d", seenBy)
+				score[seenBy]++
 			}
 		}
 	}
 
-	for p:=0; p<numPlayers; p++ {
-		close(stop[p])
+	pod.AddCallback(&cb)
+
+	for i := 0; i < N; i++ {
+		trace("raising mole %d", i)
+		currentMole,_ = pod.NewPage()
+		trace("page created %s", currentMole.URL())
+		currentMole.Set("isMole", true)	
+		trace("mole was raised %s", currentMole.URL())	
+		if ! currentMole.Deleted() {
+			panic("mole should have been deleted via callbacks")
+		}
 	}
 
-	//log.Printf("score %s", score)
+	
+	trace("Score: %s", score)
 }
 
 	

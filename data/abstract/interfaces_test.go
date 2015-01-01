@@ -99,6 +99,48 @@ func TestListener(t *testing.T) {
 	}
 }
 
+func BenchmarkNakedGetAbs(b *testing.B) {
+
+	p,_ := NewPage("inmem")
+
+	for i := 0; i < b.N; i++ {
+		_,_ = p.NakedGet("a")
+	}
+}
+
+
+func BenchmarkNakedGetPres(b *testing.B) {
+
+	p,_ := NewPage("inmem")
+	v := 1;
+	p.Set("a", v)
+
+	for i := 0; i < b.N; i++ {
+		_,_ = p.NakedGet("a")
+	}
+}
+
+
+func BenchmarkGetAbsent(b *testing.B) {
+
+	p,_ := NewPage("inmem")
+
+	for i := 0; i < b.N; i++ {
+		_,_ = p.Get("a")
+	}
+}
+
+func BenchmarkGetPresent(b *testing.B) {
+
+	p,_ := NewPage("inmem")
+	v := 1;
+	p.Set("a", v)
+
+	for i := 0; i < b.N; i++ {
+		_,_ = p.Get("a")
+	}
+}
+
 
 func BenchmarkSetNoChange(b *testing.B) {
 
@@ -135,47 +177,6 @@ func BenchmarkSetYesChange10(b *testing.B) {
 	}
 }
 
-func BenchmarkGetPresent(b *testing.B) {
-
-	p,_ := NewPage("inmem")
-	v := 1;
-	p.Set("a", v)
-
-	for i := 0; i < b.N; i++ {
-		_,_ = p.Get("a")
-	}
-}
-
-func BenchmarkGetAbsent(b *testing.B) {
-
-	p,_ := NewPage("inmem")
-
-	for i := 0; i < b.N; i++ {
-		_,_ = p.Get("a")
-	}
-}
-
-
-func BenchmarkNakedGetPres(b *testing.B) {
-
-	p,_ := NewPage("inmem")
-	v := 1;
-	p.Set("a", v)
-
-	for i := 0; i < b.N; i++ {
-		_,_ = p.NakedGet("a")
-	}
-}
-
-func BenchmarkNakedGetAbs(b *testing.B) {
-
-	p,_ := NewPage("inmem")
-
-	for i := 0; i < b.N; i++ {
-		_,_ = p.NakedGet("a")
-	}
-}
-
 
 func BenchmarkListener(b *testing.B) {
 
@@ -190,6 +191,46 @@ func BenchmarkListener(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkCallback(b *testing.B) {
+
+	p,_ := NewPage("inmem")
+
+	var callbackRan bool
+
+	/*
+	cb := func(data interface{}) {
+		// page := data.(Page)
+		callbackRan = true
+	}
+	p.AddCallback(&cb)
+*/
+
+	for i := 0; i < b.N; i++ {
+		callbackRan = false
+		p.Set("a",i)
+		if callbackRan != false  {
+			b.Error()
+		}
+	}
+
+}
+
+func BenchmarkCallbackNest(b *testing.B) {
+
+	p,_ := NewPage("inmem")
+	count := b.N
+	cb := func(data interface{}) {
+		// page := data.(Page)
+		if count > 0 {
+			count--
+			p.Set("a",count)
+		}
+	}
+	p.AddCallback(&cb)
+	p.Set("a",count)
+}
+
 
 func echo(to, from chan string) {
 	for {
@@ -230,6 +271,18 @@ func BenchmarkChannel2(b *testing.B) {
 	}
 	to <- ""
 }
+
+func BenchmarkPageLife(b *testing.B) {
+
+	pod := NewPod("http://example.com/")
+
+	for i := 0; i < b.N; i++ {
+		p,_ := pod.NewPage()
+		p.Delete()
+	}
+}
+
+
 
 
 /*

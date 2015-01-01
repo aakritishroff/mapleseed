@@ -2,18 +2,21 @@ package inmem
 
 import (
     "encoding/json"
-	"time"
+	// "time"
 	"../slowclock"
 )
 
 
 func NewPage() (page *Page, etag string) {
+	return NewPageData(make(map[string]interface{}))
+}
+func NewPageData(data map[string]interface{}) (page *Page, etag string) {
 	page = &Page{}
     page.path = ""
     page.pod = nil
     etag = page.etag()
-	page.lastModified = time.Now().UTC()
-	page.appData = make(map[string]interface{})
+	page.lastModified = slowclock.Now().UTC()
+	page.appData = data
     return
 }
 
@@ -40,8 +43,11 @@ func (page *Page) doneWithLock(startingMod uint64) {
 		// single-property write speed by nearly 4x in simple benchmark.
 		page.lastModified = slowclock.Now().UTC()
 
+		// as func so we can play with making it a goroutine
+		// -- turns out wam runs ~5% slower if we do
 		func () {
-			page.Listeners.Notify(page);
+			page.Notify(page)
+			page.Listeners.Notify(page)
 			if page.pod != nil {
 				//log.Printf("pod.touched")
 				page.pod.touched(page)
@@ -88,18 +94,19 @@ func (page *Page) SetProperties(m map[string]interface{}, onlyIfMatch string) (e
     return
 }
 
-// Delete still needs work.  For now, it just marks it as deleted and
-// forgets most of the data it stores.  Actually reclaiming all
-// storage would have to be done differently, since there are pointers
-// to this page.  Also, what about ACLs and what etag to use if one
-// re-creates this URL?  (etags need to be like "20141204-3" maybe,
-// assuming we can remember deleted pages for a day.)
+// What about ACLs and what etag to use if one re-creates this URL?
+// (etags need to be like "20141204-3" maybe, assuming we can remember
+// deleted pages for a day.)
+
 func (page *Page) Delete() {
     page.mutex.Lock()
     defer page.doneWithLock(page.modCount)
     page.deleted = true
 	page.appData = make(map[string]interface{})
 	page.modCount++
+	if page.pod != nil {
+		page.pod.RemovePage(page)
+	}
 }
 
 func (page *Page) Undelete() {

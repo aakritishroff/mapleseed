@@ -18,6 +18,7 @@ import (
 
 
 type Pod struct {
+	notifier
     sync.RWMutex  
     rootPage      *Page   // public profile info
 	configPage    *Page   // private profile info
@@ -69,10 +70,15 @@ func (pod *Pod) HasPassword(password string) bool {
 }
 
 func (pod *Pod) touched(page *Page) {
+
+	pod.Notify(page)
+
 	pod.Listeners.Notify(page);
+
     if pod.cluster != nil {
 		pod.cluster.clusterTouched(page)
 	}
+
 }
 
 func (pod *Pod) URL() string {
@@ -105,11 +111,7 @@ func (pod *Pod) loadedPages() (result []*Page) {
    taken.   So we'll leave it like this for now.
 */
 
-
-func (pod *Pod) NewPage() (page *Page, etag string) {
-	page,_ = NewPage()
-    pod.Lock()
-    var path string
+func (pod *Pod) uniquePath() (path string) {
     for {
         path = fmt.Sprintf("a%d", pod.newPageNumber)
         pod.newPageNumber++
@@ -123,13 +125,28 @@ func (pod *Pod) NewPage() (page *Page, etag string) {
 		}
 		break
     }
-    page.path = path
+	return
+}
+
+func (pod *Pod) NewPage() (page *Page, etag string) {
+	page,_ = NewPage()
+    pod.Lock()
+    defer pod.Unlock()
+    var path string
+    page.path = pod.uniquePath()
     page.pod = pod
     etag = page.etag()
     pod.pages[path] = page
-    pod.Unlock()
     return
 }
+
+func (pod *Pod) RemovePage(page *Page) {
+    pod.Lock()
+	defer pod.Unlock()
+	delete(pod.pages, page.path)
+}
+
+
 func (pod *Pod) PageByPath(path string, mayCreate bool) (page *Page, created bool) {
     pod.Lock()
 	defer pod.Unlock()
@@ -184,4 +201,17 @@ func (pod *Pod) PageByURL(url string, mayCreate bool) (page *Page, created bool)
 // so that we can access this via an interface
 func (pod *Pod) AddListener(l chan interface{}) {
 	pod.Listeners.Add(l)
+}
+
+// PushNew combines NewPage and SetProperties into an atomic unit
+func (pod *Pod) PushNew(data map[string]interface{}) {
+	page,_ := NewPageData(data)
+    pod.Lock()
+    var path string
+    page.path = pod.uniquePath()
+    page.pod = pod
+    pod.pages[path] = page
+    pod.Unlock()
+	page.pod.touched(page)
+    return
 }

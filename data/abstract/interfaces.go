@@ -6,11 +6,14 @@ import (
 
 type JSON map[string]interface{}
 
+type Callback *func(interface{})
+
 type Notifier interface {
-	AddCBListener(func(interface{}))
+	AddCallback(cb *func(interface{}))
 }
 
 type Page interface {
+	Notifier
 	Get(prop string) (value interface{}, exists bool)
 	GetDefault(prop string, def interface{}) (value interface{})
 	NakedGet(prop string) (value interface{}, exists bool)
@@ -36,6 +39,7 @@ type Page interface {
 }
 
 type Pod interface {
+	Notifier
 	AddListener(chan interface{})
 	// I still don't quite grok interfaces.  I want this to be returning
 	// a Page, but I can't...

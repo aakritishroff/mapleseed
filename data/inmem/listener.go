@@ -9,7 +9,7 @@ import (
 	"sync"
 )
 
-type Listener chan interface{};
+type Listener chan interface{}
 
 type PageListenerList struct {
 	mutex          sync.Mutex // public functions are threadsafe
@@ -40,6 +40,10 @@ func (pll *PageListenerList) Remove(l Listener) {
 func (pll *PageListenerList) Notify(page *Page) {
 	//log.Printf("notifying... 1")
 	pll.mutex.Lock()
+	if len(pll.listeners) == 0 {
+		pll.mutex.Unlock()
+		return
+	}
 	snapshot := make([]Listener, len(pll.listeners))
 	copy(snapshot, pll.listeners)
 	pll.mutex.Unlock()
