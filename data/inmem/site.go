@@ -82,6 +82,10 @@ func (pod *Pod) URL() string {
 
 func (pod *Pod) Pages() (result []*Page) {
 	pod.loadAllPages()
+	return pod.loadedPages()
+}
+
+func (pod *Pod) loadedPages() (result []*Page) {
     pod.RLock()
     result = make([]*Page, 0, len(pod.pages))
     for _, k := range pod.pages {
@@ -176,3 +180,8 @@ func (pod *Pod) PageByURL(url string, mayCreate bool) (page *Page, created bool)
     return pod.PageByPath(path, mayCreate)
 }
 
+
+// so that we can access this via an interface
+func (pod *Pod) AddListener(l chan interface{}) {
+	pod.Listeners.Add(l)
+}

@@ -124,22 +124,14 @@ func BenchmarkSetYesChange(b *testing.B) {
 	}
 }
 
-func BenchmarkSetYesChange2(b *testing.B) {
+func BenchmarkSetYesChange10(b *testing.B) {
 
 	p,_ := NewPage("inmem")
 
 	for i := 0; i < b.N; i++ {
-		p.Set("a",1)
-		p.Set("a",2)
-	}
-}
-func BenchmarkSetYesChange3(b *testing.B) {
-
-	p,_ := NewPage("inmem")
-
-	for i := 0; i < b.N; i++ {
-		p.Set("a",1)
-		p.Set("a",2)
+		for j := 0; j < 10; j++ {
+			p.Set("a",j)
+		}
 	}
 }
 
@@ -160,6 +152,27 @@ func BenchmarkGetAbsent(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		_,_ = p.Get("a")
+	}
+}
+
+
+func BenchmarkNakedGetPres(b *testing.B) {
+
+	p,_ := NewPage("inmem")
+	v := 1;
+	p.Set("a", v)
+
+	for i := 0; i < b.N; i++ {
+		_,_ = p.NakedGet("a")
+	}
+}
+
+func BenchmarkNakedGetAbs(b *testing.B) {
+
+	p,_ := NewPage("inmem")
+
+	for i := 0; i < b.N; i++ {
+		_,_ = p.NakedGet("a")
 	}
 }
 

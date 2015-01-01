@@ -108,14 +108,20 @@ func (page *Page) GetDefault(prop string, def interface{}) (value interface{}) {
     return
 }
 
+func (page *Page) NakedGetDefault(prop string, def interface{}) (value interface{}) {
+    value, exists := page.NakedGet(prop)
+    if !exists { value = def }
+    return
+}
+
 func (page *Page) Get(prop string) (value interface{}, exists bool) {
     page.mutex.RLock()
     defer page.mutex.RUnlock()
-	return page.locked_Get(prop)
+	return page.NakedGet(prop)
 }
 
 // WHY do we need to return "exists", when value==nil means it doesn't?
-func (page *Page) locked_Get(prop string) (value interface{}, exists bool) {
+func (page *Page) NakedGet(prop string) (value interface{}, exists bool) {
     if prop == "_id" {
         if page.pod == nil { return "", false }
         return page.URL(), true

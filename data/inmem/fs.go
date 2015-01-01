@@ -97,6 +97,9 @@ func (pod *Pod) pathTakenOnDisk(path string) bool {
 }
 
 func (pod *Pod) filename() string {
+	if pod.cluster == nil {
+		return ""
+	}
 	return pod.cluster.fsroot+"/"+url.QueryEscape(pod.TrimmedName())
 }
 
@@ -268,6 +271,7 @@ func (pod *Pod) loadAllPages() {
 			log.Printf("New page was created while loading same URL from disk");
 		}
 	}
+	log.Printf("all pages loaded for %s", pod.URL())
 	pod.fullyLoaded = true
 }
 
@@ -292,11 +296,12 @@ func (cluster *Cluster) recreatePodsFromDisk() {
 			panic(err)
 		}
 		pod := NewPod(url)
+		pod.fullyLoaded = false
+		cluster.locked_AddPod(pod)
 		pod.pwHash, err = ioutil.ReadFile(pod.filename()+"/pw")
 		if err != nil {
 			panic(err)
 		}
-		cluster.AddPod(pod)
-		log.Printf("restored pod %q from disk", name)
+		//log.Printf("restored pod %q from disk", name)
 	}
 }

@@ -88,28 +88,34 @@ func (cluster *Cluster) Pods() (result []*Pod) {
 
 var NameAlreadyTaken = errors.New("URL already taken");
 
-func (cluster *Cluster) AddPod(pod *Pod) error {
-
-	log.Printf("2000")
+func (cluster *Cluster) AddPod(pod interface{}) error {
+	
+	mpod := pod.(*Pod)
+	
     cluster.lock()
     defer cluster.unlock()
+	return cluster.locked_AddPod(mpod)
+}
 
-	log.Printf("2001")
+func (cluster *Cluster) locked_AddPod(pod *Pod) error {
+
 	url := pod.URL()
     if _, existed := cluster.pods[url]; existed {
-		log.Printf("2005")
 		return NameAlreadyTaken
     }
 
-	log.Printf("2010")
-	// use a SetClusterPointer() to pod can be an interface?
+	// use a SetClusterPointer() so pod can be an interface?
 	// ... except that might might folks think it's safe to
-	// mess with...
+	// call it themselves
     pod.cluster = cluster
 
     cluster.pods[url] = pod
-    cluster.clusterTouched(pod.rootPage)   // FIXME really should be ALL PAGES
 	pod.save()
+
+	for _,page := range pod.loadedPages() {
+		cluster.clusterTouched(page)
+	}
+ 
     return nil
 }
 

@@ -1,5 +1,10 @@
 package inmem
 
+//
+//    BIG PROBLEM:    if people don't make their listener channel
+//    big enough, we can block on notify.   Should this be done in
+//    a go-routine?
+//
 import ( 
 	"sync"
 )
@@ -33,11 +38,15 @@ func (pll *PageListenerList) Remove(l Listener) {
 // this can block, if one of the listener queues is full, so you may
 // want to use "go pll.Notify(page)"
 func (pll *PageListenerList) Notify(page *Page) {
+	//log.Printf("notifying... 1")
 	pll.mutex.Lock()
 	snapshot := make([]Listener, len(pll.listeners))
 	copy(snapshot, pll.listeners)
 	pll.mutex.Unlock()
+	//log.Printf("notifying... 2")
 	for _,l := range snapshot {
+		//log.Printf("notifying... 3 %q", i)
 		l <- page
 	}
+	//log.Printf("notifying... 4")
 }

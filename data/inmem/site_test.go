@@ -7,9 +7,10 @@ import (
 func BenchmarkPodNewPage(b *testing.B) {
 
 	cluster := NewInMemoryCluster()
-	s,_ := cluster.NewPod("http://example.com/")
+	pod  := NewPod("http://example.com/")
+	cluster.AddPod(pod)
 
 	for i := 0; i < b.N; i++ {
-		s.NewPage()
+		pod.NewPage()
 	}
 }

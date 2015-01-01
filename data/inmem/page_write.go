@@ -26,6 +26,11 @@ func (page *Page) doneWithLock(startingMod uint64) {
 
 	modified := startingMod != page.modCount
 
+	// can we please get rid of this, soon?  Currently needed by query
+	if modified && page.pod != nil && page.pod.cluster != nil {
+		// shouldn't be lockr the cluster?    but might that give deadlock?
+		page.clusterModCount = page.pod.cluster.modCount
+	}
 	page.mutex.Unlock()
 
 	if modified {
@@ -35,15 +40,15 @@ func (page *Page) doneWithLock(startingMod uint64) {
 		// single-property write speed by nearly 4x in simple benchmark.
 		page.lastModified = slowclock.Now().UTC()
 
-		page.Listeners.Notify(page);
-		if page.pod != nil {
-			page.pod.touched(page)
-			if page.pod.cluster != nil {
-				// I'd like to remove this hack soon....  needed by
-				// current query infrastructure
-				page.clusterModCount = page.pod.cluster.modCount
+		func () {
+			page.Listeners.Notify(page);
+			if page.pod != nil {
+				//log.Printf("pod.touched")
+				page.pod.touched(page)
+				//log.Printf("pod.touched DONE")
 			}
-		}
+		}()
+
 	}
 }
 
