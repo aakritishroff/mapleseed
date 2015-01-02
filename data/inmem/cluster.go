@@ -11,7 +11,7 @@ import (
 )
 
 type Cluster struct {
-    // Page
+	notifier
 	mutex          sync.RWMutex // public functions are threadsafe
     pods map[string]*Pod
 
@@ -34,6 +34,7 @@ func (cluster *Cluster) clusterTouched(page *Page) {
     cluster.modCount++
     cluster.modlock.Unlock()
     cluster.modified.Broadcast()
+	cluster.Notify(page)
 	cluster.Listeners.Notify(page)
 }
 
@@ -135,15 +136,18 @@ func (cluster *Cluster) PodByURL(url string) (pod *Pod) {
 func (cluster *Cluster) PageByURL(url string, mayCreate bool) (page *Page, created bool) {
     // if we had a lot of pods we could hardcode some logic about
     // what their URLs look like, but for now this should be fine.
+	trace("Cluster.PageByURL(%v)", url) 
     cluster.rlock()
     defer cluster.runlock()
     for _, pod := range cluster.pods {
+		trace("Cluster.PageByURL maybe pod %v", pod.urlWithSlash)
         if strings.HasPrefix(url, pod.urlWithSlash) {
             page, created = pod.PageByURL(url, mayCreate)
             return
         }
     }
 	log.Printf("can't do PageByURL -- no suitable pod: %q:", url)
+	trace("Cluster.PageByURL(%v) -- NO POD MATCHES", url) 
     return
 }
 

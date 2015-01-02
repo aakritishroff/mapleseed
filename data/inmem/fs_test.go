@@ -3,7 +3,7 @@ package inmem
 import (
 	"testing"
 	"os"
-	//"log"
+	"log"
 )
 
 func TestFS1(t *testing.T) {
@@ -23,6 +23,8 @@ func TestFS1(t *testing.T) {
 	pg.Set("a", "100");
 	id := pg.URL()
 	w.Flush() // make sure everything's written before we try to re-read it
+	/////   BUT THIS DOESNT WORK ANY MORE, since
+	/////   we added to fork to listener.Notify()
 	w = nil
 	p = nil
 	pg = nil
@@ -47,7 +49,8 @@ func TestFS1(t *testing.T) {
 	}
 	//log.Printf("pg: %q", pg)
 	if pg.GetDefault("a", nil) != "100" {
-		t.Error("not working....")
+		log.Printf("page.appData value was %+v", pg.appData)
+		t.Error("page didn't have expected value")
 		return
 	}
 }

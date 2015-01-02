@@ -20,4 +20,5 @@ rsync -avvR $P/admin/run-js-tests $P/*.go $P/*/*.go $P/*/*/*.go root@${to}:/root
 
 # beward importing something from sandhawke but not copying it in yet,
 # because then "go get" will pull it from github
-ssh root@${to} "cd go/src/github.com/sandhawke/mapleseed && go get && go build && go test && go install && supervisorctl restart mapleseed"
+echo "building, testing, installing..."
+ssh root@${to} "cd go/src/github.com/sandhawke/mapleseed && go get -v && go build && go test ./data/... && go test -v && go install && supervisorctl restart mapleseed"

@@ -51,7 +51,7 @@ func (pll *PageListenerList) Notify(page *Page) {
 	//log.Printf("notifying... 2")
 
 	// put this in a goroutine so it's okay if send blocks
-	// (it basically gives us elastic channels)
+	// (it basically gives us elastic channels
 	go func() {
 		for _,l := range snapshot {
 			//log.Printf("notifying listener %d of %s", i, page.URL())

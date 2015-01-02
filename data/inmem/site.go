@@ -58,6 +58,9 @@ func (pod *Pod) SetPassword(newPassword string) {
 
 
 func (pod *Pod) HasPassword(password string) bool {
+	if string(pod.pwHash) == "" && password == "" {
+		return true
+	}
     err := bcrypt.CompareHashAndPassword(pod.pwHash, []byte(password))
 	if err == bcrypt.ErrMismatchedHashAndPassword {
 		return false
@@ -129,12 +132,14 @@ func (pod *Pod) uniquePath() (path string) {
 
 func (pod *Pod) NewPage(data ...map[string]interface{}) (page *Page, etag string) {
 	page,_ = NewPage(data...)
+	trace("Pod.NewPage data=%v", data)
     pod.Lock()
-    var path string
     page.path = pod.uniquePath()
+	trace("Pod.NewPage generated path=%v", page.path)
     page.pod = pod
     etag = page.etag()
-    pod.pages[path] = page
+    pod.pages[page.path] = page
+	trace("Pod.NewPage added %p==%p", pod.pages[page.path], page)
 
 	pod.Unlock()
 
@@ -153,9 +158,10 @@ func (pod *Pod) PageByPath(path string, mayCreate bool) (page *Page, created boo
     pod.Lock()
 	defer pod.Unlock()
 
-	//log.Printf("pagebypath: %s", path);
+	trace("Pod.PageByPath %v,%v", path, mayCreate)
 
     page, _ = pod.pages[path]
+	trace("Pod.PageByPath map had: %+v", page)
 	if !pod.fullyLoaded && page == nil {
 		page,_ = NewPage()
 		page.path = path
@@ -192,10 +198,14 @@ func (pod *Pod) PageByPath(path string, mayCreate bool) (page *Page, created boo
 }
 
 func (pod *Pod) PageByURL(url string, mayCreate bool) (page *Page, created bool) {
+	trace("Pod.PageByURL %q", url)
+	
 	if len(url) < len(pod.urlWithSlash) {
+		trace("Pod.PageByURL too short", url)
 		return nil, false
 	}
     path := url[len(pod.urlWithSlash):]
+	trace("Pod.PageByURL path=%q", path)
     return pod.PageByPath(path, mayCreate)
 }
 

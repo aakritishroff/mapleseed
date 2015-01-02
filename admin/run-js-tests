@@ -15,4 +15,5 @@ fi
 if [ -z "$PODURL" ]; then
   export PODURL="http://localhost:8080/pod/testuser/"
 fi
-exec npm test
+exec ./node_modules/mocha/bin/mocha --colors --bail --timeout 500
+#exec npm test

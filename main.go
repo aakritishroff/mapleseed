@@ -71,6 +71,8 @@ func main() {
 		}
 	}
 
+	db.Trace = true
+
 	serve(cluster, ":"+*port)
 }
 
