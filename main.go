@@ -7,9 +7,9 @@ import (
 	"os"
 	"time"
 	"fmt"
-	db "./data/inmem"
-	httpTransport "./transport/http"
-	wsTransport "./transport/websocket"
+	db "github.com/sandhawke/mapleseed/data/inmem"
+	httpTransport "github.com/sandhawke/mapleseed/transport/http"
+	wsTransport "github.com/sandhawke/mapleseed/transport/websocket"
 )
 
 type JSON map[string]interface{};

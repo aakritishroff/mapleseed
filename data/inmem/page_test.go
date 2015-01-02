@@ -229,7 +229,7 @@ func BenchmarkGetPresentNoLock(b *testing.B) {
 	p.Set("a", v)
 
 	for i := 0; i < b.N; i++ {
-		_,_ = p.locked_Get("a")
+		_,_ = p.NakedGet("a")
 	}
 }
 

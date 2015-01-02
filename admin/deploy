@@ -12,6 +12,12 @@ if test "$to" = "" ; then
   exit 1
 fi
 
-scp *.go root@${to}:/root/go/src/github.com/sandhawke/mapleseed
-scp ../pagestore/inmem/*.go root@${to}:/root/go/src/github.com/sandhawke/pagestore/inmem
-ssh root@${to} "cd go/src/github.com/sandhawke/mapleseed && go build && go test && go install && supervisorctl restart mapleseed"
+# rsync -avvR admin/run-js-tests *.go */*.go */*/*.go root@${to}:/root/go/src/github.com/sandhawke/mapleseed
+
+P=src/github.com/sandhawke/mapleseed
+cd $GOPATH
+rsync -avvR $P/admin/run-js-tests $P/*.go $P/*/*.go $P/*/*/*.go root@${to}:/root/go
+
+# beward importing something from sandhawke but not copying it in yet,
+# because then "go get" will pull it from github
+ssh root@${to} "cd go/src/github.com/sandhawke/mapleseed && go get && go build && go test && go install && supervisorctl restart mapleseed"

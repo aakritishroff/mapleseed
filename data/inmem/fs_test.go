@@ -47,7 +47,7 @@ func TestFS1(t *testing.T) {
 	}
 	//log.Printf("pg: %q", pg)
 	if pg.GetDefault("a", nil) != "100" {
-		t.Error()
+		t.Error("not working....")
 		return
 	}
 }

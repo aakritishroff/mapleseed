@@ -4,7 +4,7 @@ import (
     "log"
     "sort"
     "time"
-	db "../data/inmem"
+	db "github.com/sandhawke/mapleseed/data/inmem"
 )
 
 type QueryOptions struct {

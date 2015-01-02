@@ -37,6 +37,12 @@ func (cluster *Cluster) clusterTouched(page *Page) {
 	cluster.Listeners.Notify(page)
 }
 
+func (cluster *Cluster) getModCount() uint64 {
+    cluster.modlock.Lock()
+	defer cluster.modlock.Unlock()
+    return cluster.modCount
+}
+
 func (cluster *Cluster) WaitForModSince(ver uint64) {
     //log.Printf("WaitForModSince %d %d 1", ver, cluster.modCount);
     // this should work with rlock, but it doesn't

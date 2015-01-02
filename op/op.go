@@ -27,7 +27,8 @@ import (
 	"log"
 	"regexp"
 	// "fmt"
-	db "../data/inmem"
+	db "github.com/sandhawke/mapleseed/data/inmem"
+
 )
 
 type JSON map[string]interface{};

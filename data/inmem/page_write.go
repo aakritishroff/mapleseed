@@ -3,7 +3,7 @@ package inmem
 import (
     "encoding/json"
 	// "time"
-	"../slowclock"
+	"github.com/sandhawke/mapleseed/data/slowclock"
 )
 
 
@@ -35,9 +35,8 @@ func (page *Page) doneWithLock(startingMod uint64) {
 	// can we please get rid of this, soon?  Currently needed by query
 	if modified && page.pod != nil && page.pod.cluster != nil {
 		// shouldn't be lockr the cluster?    but might that give deadlock?
-		page.clusterModCount = page.pod.cluster.modCount
+		page.clusterModCount = page.pod.cluster.getModCount()
 	}
-	page.mutex.Unlock()
 
 	if modified {
 		// we use slowclock.Now() instead of time.Now() because
@@ -45,7 +44,12 @@ func (page *Page) doneWithLock(startingMod uint64) {
 		// (2) using time.Now() was a huge slowdown.  This change increases
 		// single-property write speed by nearly 4x in simple benchmark.
 		page.lastModified = slowclock.Now().UTC()
+	}
 
+	page.mutex.Unlock()
+
+
+	if modified {
 		// as func so we can play with making it a goroutine
 		// -- turns out wam runs ~5% slower if we do
 		func () {

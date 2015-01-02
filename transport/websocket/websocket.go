@@ -19,8 +19,8 @@ import (
 	"code.google.com/p/go.net/websocket"
 	// "net/http"
 	// "net"
-	db "../../data/inmem"
-	"../../op"
+	db "github.com/sandhawke/mapleseed/data/inmem"
+	"github.com/sandhawke/mapleseed/op"
 )
 
 

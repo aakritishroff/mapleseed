@@ -19,8 +19,8 @@ import (
 	"strings"
 	"net/http"
 	"encoding/json"
-	db "../../data/inmem"
-	"../../op"
+	db "github.com/sandhawke/mapleseed/data/inmem"
+	"github.com/sandhawke/mapleseed/op"
 )
 
 type HAct struct {

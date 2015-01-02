@@ -1,7 +1,7 @@
 package abstract
 
 import (
-	"../inmem"
+	"github.com/sandhawke/mapleseed/data/inmem"
 )
 
 type JSON map[string]interface{}

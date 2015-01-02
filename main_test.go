@@ -1,7 +1,7 @@
 package main
 
 import (
-	db "./data/inmem"
+	db "github.com/sandhawke/mapleseed/data/inmem"
 	"fmt"
 	"io"
 	"log"
