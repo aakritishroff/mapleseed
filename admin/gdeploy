@@ -1,0 +1,34 @@
+#!/bin/sh
+
+if [ ! -f admin/gdeploy ]; then
+  echo I think you are running this from the wrong place
+  exit 1 
+fi
+
+group=$1
+if [ -z "$group" ]; then
+  echo usage: $0 server-group-name
+  exit 1
+fi
+
+groupfile="admin/groupconfig/$group.sh"
+if [ ! -f "$groupfile" ]; then
+  echo Missing group configfile: $groupfile
+  echo Please create it, or give us a different group
+  exit 1
+fi
+
+. $groupfile
+
+echo packaging with tar
+tar -czf .all.tz --exclude=.all.tz --exclude=*.out --exclude=*~ --exclude=.git --exclude=.js-test* --exclude=Test_Via* --exclude=_* --exclude=.fsbind* --exclude=mapleseed .
+
+ls -l .all.tz
+
+# do this for each remote system....
+for host in $servers; do
+  echo copy to $host...
+  ssh root@$host < .all.tz "rm -rf newdep && mkdir newdep && cd newdep && tar xzf - . && admin/run-as-server $host"
+done
+echo done
+

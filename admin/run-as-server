@@ -1,0 +1,12 @@
+#!/bin/sh
+
+host=$1
+
+if [ ! -f admin/run-as-server ]; then
+  echo I think you are running this from the wrong place
+  exit 1 
+fi
+
+echo rebuilding and restarting mapleseed on $host
+
+#"cd go/src/github.com/sandhawke/mapleseed && go get -v && go build && go test ./data/... && go test -v && go install && supervisorctl restart mapleseed"
