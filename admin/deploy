@@ -12,13 +12,13 @@ if test "$to" = "" ; then
   exit 1
 fi
 
-# rsync -avvR admin/run-js-tests *.go */*.go */*/*.go root@${to}:/root/go/src/github.com/sandhawke/mapleseed
+# rsync -avvR admin/run-js-tests *.go */*.go */*/*.go root@${to}:/root/go/src/github.com/aakritishroff/mapleseed
 
-P=src/github.com/sandhawke/mapleseed
+P=src/github.com/aakritishroff/mapleseed
 cd $GOPATH
 rsync -avvR $P/admin/run-js-tests $P/*.go $P/*/*.go $P/*/*/*.go root@${to}:/root/go
 
 # beward importing something from sandhawke but not copying it in yet,
 # because then "go get" will pull it from github
 echo "building, testing, installing..."
-ssh root@${to} "cd go/src/github.com/sandhawke/mapleseed && go get -v && go build && go test ./data/... && go test -v && go install && supervisorctl restart mapleseed"
+ssh root@${to} "cd go/src/github.com/aakritishroff/mapleseed && go get -v && go build && go test ./data/... && go test -v && go install && supervisorctl restart mapleseed"

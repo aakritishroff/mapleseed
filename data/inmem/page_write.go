@@ -1,17 +1,16 @@
 package inmem
 
 import (
-    "encoding/json"
+	"encoding/json"
 	// "time"
-	"github.com/sandhawke/mapleseed/data/slowclock"
+	"github.com/aakritishroff/mapleseed/data/slowclock"
 )
-
 
 func NewPage(data ...map[string]interface{}) (page *Page, etag string) {
 	page = &Page{}
-    page.path = ""
-    page.pod = nil
-    etag = page.etag()
+	page.path = ""
+	page.pod = nil
+	etag = page.etag()
 	page.lastModified = slowclock.Now().UTC()
 	if len(data) == 0 {
 		page.appData = make(map[string]interface{})
@@ -20,7 +19,7 @@ func NewPage(data ...map[string]interface{}) (page *Page, etag string) {
 	} else {
 		panic("too many arguments to NewPage")
 	}
-    return
+	return
 }
 
 // This is called (via defer) at the end of every modify function to
@@ -48,11 +47,10 @@ func (page *Page) doneWithLock(startingMod uint64) {
 
 	page.mutex.Unlock()
 
-
 	if modified {
 		// as func so we can play with making it a goroutine
 		// -- turns out wam runs ~5% slower if we do
-		func () {
+		func() {
 			page.Notify(page)
 			page.Listeners.Notify(page)
 			if page.pod != nil {
@@ -65,40 +63,39 @@ func (page *Page) doneWithLock(startingMod uint64) {
 	}
 }
 
-
 // onlyIfMatch is the HTTP If-Match header value; abort if its the wrong etag
 func (page *Page) SetContent(contentType string, content string, onlyIfMatch string) (etag string, notMatched bool) {
-    page.mutex.Lock()
+	page.mutex.Lock()
 	defer page.doneWithLock(page.modCount)
-    //fmt.Printf("onlyIfMatch=%q, etag=%q\n", onlyIfMatch, page.etag())
-    if onlyIfMatch == "" || onlyIfMatch == page.etag() {
-        if contentType == "application/json" {
-            page.locked_Zero()
-            page.locked_OverlayWithJSON([]byte(content))
-        } else {
-            page.locked_Set("contentType", contentType)
-            page.locked_Set("content", content)
-        }
-        etag = page.etag()
-    } else {
-        notMatched = true
-    }
-    return
+	//fmt.Printf("onlyIfMatch=%q, etag=%q\n", onlyIfMatch, page.etag())
+	if onlyIfMatch == "" || onlyIfMatch == page.etag() {
+		if contentType == "application/json" {
+			page.locked_Zero()
+			page.locked_OverlayWithJSON([]byte(content))
+		} else {
+			page.locked_Set("contentType", contentType)
+			page.locked_Set("content", content)
+		}
+		etag = page.etag()
+	} else {
+		notMatched = true
+	}
+	return
 }
 
 func (page *Page) SetProperties(m map[string]interface{}, onlyIfMatch string) (etag string, notMatched bool) {
-    //fmt.Printf("onlyIfMatch=%q, etag=%q\n", onlyIfMatch, page.etag())
+	//fmt.Printf("onlyIfMatch=%q, etag=%q\n", onlyIfMatch, page.etag())
 	page.mutex.Lock()
 	defer page.doneWithLock(page.modCount)
 	// cant use defer
-    if onlyIfMatch == "" || onlyIfMatch == page.etag() {
+	if onlyIfMatch == "" || onlyIfMatch == page.etag() {
 		//log.Printf("modifying")
-        page.locked_OverlayWithMap(m)
-    } else {
-        notMatched = true
-    }
+		page.locked_OverlayWithMap(m)
+	} else {
+		notMatched = true
+	}
 	etag = page.etag()
-    return
+	return
 }
 
 // What about ACLs and what etag to use if one re-creates this URL?
@@ -106,9 +103,9 @@ func (page *Page) SetProperties(m map[string]interface{}, onlyIfMatch string) (e
 // deleted pages for a day.)
 
 func (page *Page) Delete() {
-    page.mutex.Lock()
-    defer page.doneWithLock(page.modCount)
-    page.deleted = true
+	page.mutex.Lock()
+	defer page.doneWithLock(page.modCount)
+	page.deleted = true
 	page.appData = make(map[string]interface{})
 	page.modCount++
 	if page.pod != nil {
@@ -117,15 +114,15 @@ func (page *Page) Delete() {
 }
 
 func (page *Page) Undelete() {
-    page.mutex.Lock()
-    defer page.doneWithLock(page.modCount)
-    page.deleted = false
+	page.mutex.Lock()
+	defer page.doneWithLock(page.modCount)
+	page.deleted = false
 	page.modCount++
 }
 
 func (page *Page) Set(prop string, value interface{}) {
-    page.mutex.Lock()
-    defer page.doneWithLock(page.modCount)
+	page.mutex.Lock()
+	defer page.doneWithLock(page.modCount)
 	page.locked_Set(prop, value)
 	return
 }
@@ -147,34 +144,33 @@ func (page *Page) locked_Set(prop string, value interface{}) {
 		}
 	}
 	if exists && oldValue == value {
-		return 
+		return
 	}
-    if value == nil {
-        delete(page.appData, prop)
-    } else {
-        page.appData[prop] = value
-    }
+	if value == nil {
+		delete(page.appData, prop)
+	} else {
+		page.appData[prop] = value
+	}
 	page.modCount++
 	return
 }
 
-
 func (page *Page) locked_OverlayWithJSON(bytes []byte) {
-    m := make(map[string]interface{})
-    json.Unmarshal(bytes, &m)
-    page.locked_OverlayWithMap(m)
+	m := make(map[string]interface{})
+	json.Unmarshal(bytes, &m)
+	page.locked_OverlayWithMap(m)
 }
 
 func (page *Page) locked_OverlayWithMap(m map[string]interface{}) {
-    for key, value := range m {
-        page.locked_Set(key, value) 
-    }
+	for key, value := range m {
+		page.locked_Set(key, value)
+	}
 }
 
 func (page *Page) locked_Zero() {
-    for _, prop := range page.Properties() {
-        if prop[0] != '_' {
-            page.locked_Set(prop, nil)
-        }
-    }
+	for _, prop := range page.Properties() {
+		if prop[0] != '_' {
+			page.locked_Set(prop, nil)
+		}
+	}
 }

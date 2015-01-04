@@ -1,14 +1,11 @@
 package main
 
 import (
-	db "./data/inmem"
-	httpTransport "./transport/http"
-	wsTransport "./transport/websocket"
 	"flag"
 	"fmt"
-	db "github.com/sandhawke/mapleseed/data/inmem"
-	httpTransport "github.com/sandhawke/mapleseed/transport/http"
-	wsTransport "github.com/sandhawke/mapleseed/transport/websocket"
+	db "github.com/aakritishroff/mapleseed/data/inmem"
+	httpTransport "github.com/aakritishroff/mapleseed/transport/http"
+	wsTransport "github.com/aakritishroff/mapleseed/transport/websocket"
 	"log"
 	"net/http"
 	"os"

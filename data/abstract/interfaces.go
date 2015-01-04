@@ -1,7 +1,7 @@
 package abstract
 
 import (
-	"github.com/sandhawke/mapleseed/data/inmem"
+	"github.com/aakritishroff/mapleseed/data/inmem"
 )
 
 type JSON map[string]interface{}
@@ -43,9 +43,9 @@ type Pod interface {
 	AddListener(chan interface{})
 	// I still don't quite grok interfaces.  I want this to be returning
 	// a Page, but I can't...
-	NewPage(data ...map[string]interface{}) (*inmem.Page, string)  
+	NewPage(data ...map[string]interface{}) (*inmem.Page, string)
 }
- 
+
 func NewPod(url string) *inmem.Pod {
 	return inmem.NewPod(url)
 }
@@ -67,4 +67,3 @@ func NewPage(impl string) (page Page, etag string) {
 		panic("unknown implementation requested")
 	}
 }
-

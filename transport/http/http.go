@@ -16,8 +16,8 @@ package http
 import (
 	"encoding/json"
 	"fmt"
-	db "github.com/sandhawke/mapleseed/data/inmem"
-	"github.com/sandhawke/mapleseed/op"
+	db "github.com/aakritishroff/mapleseed/data/inmem"
+	"github.com/aakritishroff/mapleseed/op"
 	"log"
 	"net/http"
 	"strings"

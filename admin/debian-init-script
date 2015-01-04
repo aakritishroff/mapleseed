@@ -6,7 +6,7 @@
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
 # Short-Description: Crosscloud mapleseed server
-# Description:       See github.com/sandhawke/mapleseed
+# Description:       See github.com/aakritishroff/mapleseed
 ### END INIT INFO
 
 # Author: Sandro Hawke <sandro@hawke.org>

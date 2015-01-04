@@ -10,7 +10,7 @@ page.appData["readers"] -->[]string (== userIDs of authorized readers)
 package op
 
 import (
-	db "../data/inmem"
+	db "github.com/aakritishroff/mapleseed/data/inmem"
 	"log"
 )
 

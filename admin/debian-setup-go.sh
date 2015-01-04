@@ -16,8 +16,8 @@ if [ ! -d go ]; then
   tar xf go${VERSION}.linux-amd64.tar.gz
 fi
 
-mkdir -p /root/go/src/github.com/sandhawke/mapleseed
-mkdir -p /root/go/src/github.com/sandhawke/pagestore/inmem
+mkdir -p /root/go/src/github.com/aakritishroff/mapleseed
+mkdir -p /root/go/src/github.com/aakritishroff/data/inmem
 mkdir -p /var/log/mapleseed
 if [ ! -f /var/log/mapleseed/save.json ]; then
   echo '{ "_members": [] }' > /var/log/mapleseed/save.json

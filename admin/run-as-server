@@ -9,4 +9,4 @@ fi
 
 echo rebuilding and restarting mapleseed on $host
 
-#"cd go/src/github.com/sandhawke/mapleseed && go get -v && go build && go test ./data/... && go test -v && go install && supervisorctl restart mapleseed"
+#"cd go/src/github.com/aakritishroff/mapleseed && go get -v && go build && go test ./data/... && go test -v && go install && supervisorctl restart mapleseed"
