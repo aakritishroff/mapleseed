@@ -29,10 +29,22 @@ import (
 	"log"
 	"regexp"
 	// "fmt"
-	db "../data/inmem"
+	db "github.com/sandhawke/mapleseed/data/inmem"
 )
 
 type JSON map[string]interface{}
+
+var Trace bool
+
+func init() {
+	Trace = true
+}
+
+func trace(template string, args ...interface{}) {
+	if Trace {
+		log.Printf("op."+template, args...)
+	}
+}
 
 /*
 
@@ -71,7 +83,7 @@ func init() {
 
 func CreatePod(act Act, podurl, password string) {
 
-	log.Printf("createPod %q", podurl)
+	trace("createPod %q", podurl)
 	//if validPodname.MatchString(name) {
 	//	podurl := fmt.Sprintf(act.Cluster().PodURLTemplate, name)
 
@@ -83,7 +95,7 @@ func CreatePod(act Act, podurl, password string) {
 		Error1(act, "Unknown error")
 	} else {
 		pod.SetPassword(password)
-		log.Printf("created pod %s", pod.URL())
+		trace("created pod %s", pod.URL())
 		act.Result(JSON{"_id": pod.URL()})
 	}
 
@@ -103,7 +115,7 @@ type CreationOptions struct {
 
 func Create(act Act, options CreationOptions) {
 
-	log.Printf("create() options %q", options)
+	trace("create() options %q", options)
 
 	if options.InContainer == "" {
 		options.InContainer = act.UserId()
@@ -118,16 +130,17 @@ func Create(act Act, options CreationOptions) {
 
 	// TODO should set the init value WHILE IT'S LOCKED.
 	etag, _ = page.SetProperties(options.InitialData, "")
-	log.Printf("InitialData was %q", options.InitialData)
-	log.Printf("now  %q", page.Properties())
+	trace("InitialData was %q", options.InitialData)
+	trace("now  %q", page.Properties())
 
 	act.Result(JSON{"_id": page.URL(), "_etag": etag})
+
 	val, ok := page.Get("isPublic")
 	if !ok { //if property not set, add owner to readers.
 		createACL(page, act.UserId(), false) //creates private ACL.
 	} else {
 		if val.(bool) == false {
-			createACL(page, act.UserId(), false) //add owner to readers
+			createACL(page, act.UserId(), false) //add owner to readers is property is{ublic == false}
 		}
 	}
 
@@ -141,7 +154,7 @@ func Create(act Act, options CreationOptions) {
 		              resources in a pipeline, without RTT for each
 
 
-			log.Printf("in.Data[_id]", in.Data["_id"])
+			trace("in.Data[_id]", in.Data["_id"])
 			urlintf := in.Data["_id"]
 			var page *db.Page
 			if urlintf == nil {
@@ -149,22 +162,51 @@ func Create(act Act, options CreationOptions) {
 			} else {
 				url := urlintf.(string)
 				podurl := url [:len(act.pod.URL())]
-				log.Printf("podurl %q, url %q , path %q", act.pod.URL(),
+				trace("podurl %q, url %q , path %q", act.pod.URL(),
 					url, url[len(act.pod.URL()):])
 				if act.pod.URL() == podurl {
 					page,_ = act.pod.PageByURL(url, true)
 				} else {
 					act.Send(Message{in.Seq, "fail", JSON{"err":"requested prefix is in the wrong web space: "+url+" doesnt start with "+podurl}});
 					return
+		>>>>>>> 638a14e81690878c70f746c7e42824bc82a81bb9
 				}
 			}
-			act.Send(Message{in.Seq, "ok", JSON{"_id":page.URL()}});
+
+			/*
+				      ADD:
+				           act.tmpIdMap()
+
+				           and allow ids like  tmp:whatever
+				           which get replaced (skolemized) during create,
+				              so you can send graphs, and send related
+				              resources in a pipeline, without RTT for each
+
+
+					log.Printf("in.Data[_id]", in.Data["_id"])
+					urlintf := in.Data["_id"]
+					var page *db.Page
+					if urlintf == nil {
+						page = act.pod.NewPage()
+					} else {
+						url := urlintf.(string)
+						podurl := url [:len(act.pod.URL())]
+						log.Printf("podurl %q, url %q , path %q", act.pod.URL(),
+							url, url[len(act.pod.URL()):])
+						if act.pod.URL() == podurl {
+							page,_ = act.pod.PageByURL(url, true)
+						} else {
+							act.Send(Message{in.Seq, "fail", JSON{"err":"requested prefix is in the wrong web space: "+url+" doesnt start with "+podurl}});
+							return
+						}
+					}
+					act.Send(Message{in.Seq, "ok", JSON{"_id":page.URL()}});
 
 	*/
 }
 
 func Read(act Act, url string) {
-	log.Printf("read() url %q", url)
+	trace("read() url %q", url)
 	page, _ := act.Cluster().PageByURL(url, false)
 	if page == nil {
 		act.Error(404, "page not found", JSON{})
@@ -178,13 +220,12 @@ func Read(act Act, url string) {
 }
 
 func Update(act Act, url string, onlyIfMatch string, data JSON) {
-	log.Printf("update() url %q, etag %q, data %q", url, onlyIfMatch, data)
+	trace("update() url %q, etag %q, data %q", url, onlyIfMatch, data)
 	page, _ := act.Cluster().PageByURL(url, false)
 	if page == nil {
 		act.Error(404, "page not found", JSON{})
 		return
 	}
-	log.Printf("0")
 	etag, notMatched := page.SetProperties(data, onlyIfMatch)
 	if notMatched {
 		act.Error(409, "etag not matched", JSON{})

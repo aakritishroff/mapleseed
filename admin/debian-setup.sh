@@ -18,7 +18,6 @@ if [ ! -d go ]; then
 fi
 
 mkdir -p /root/go/src/github.com/sandhawke/mapleseed
-mkdir -p /root/go/src/github.com/sandhawke/pagestore/inmem
 mkdir -p /var/log/mapleseed
 if [ ! -f /var/log/mapleseed/save.json ]; then
   echo '{ "_members": [] }' > /var/log/mapleseed/save.json
@@ -34,10 +33,20 @@ echo 'export PATH=/usr/local/go/bin:$PATH' >> /root/.bashrc
 go version
 
 apt-get update
-apt-get --yes install mercurial supervisor screen htop
-go get 'code.google.com/p/go.net/websocket'
+apt-get --yes install mercurial supervisor screen htop curl build-essential
 
 cd
 sed "s/@@HOST/$host/g" < supervisord.conf.template > /etc/supervisor/conf.d/mapleseed.conf
 supervisorctl reread
 supervisorctl update
+
+#
+# install nodejs
+#
+
+curl -s https://deb.nodesource.com/gpgkey/nodesource.gpg.key | apt-key add -
+echo 'deb https://deb.nodesource.com/node wheezy main' > /etc/apt/sources.list.d/nodesource.list
+echo 'deb-src https://deb.nodesource.com/node wheezy main' >> /etc/apt/sources.list.d/nodesource.list
+apt-get update
+apt-get install -y nodejs # nodejs-legacy
+nodejs --version

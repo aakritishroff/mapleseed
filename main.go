@@ -6,6 +6,9 @@ import (
 	wsTransport "./transport/websocket"
 	"flag"
 	"fmt"
+	db "github.com/sandhawke/mapleseed/data/inmem"
+	httpTransport "github.com/sandhawke/mapleseed/transport/http"
+	wsTransport "github.com/sandhawke/mapleseed/transport/websocket"
 	"log"
 	"net/http"
 	"os"
@@ -70,6 +73,8 @@ func main() {
 			panic(err)
 		}
 	}
+
+	db.Trace = true
 
 	serve(cluster, ":"+*port)
 }

@@ -4,61 +4,59 @@
 
 */
 
-
 package inmem
 
 import (
-    //"log"
-    "fmt"
-    "sync"
-	"strings"
+	"fmt"
 	"golang.org/x/crypto/bcrypt"
+	"strings"
+	"sync"
 )
 
-
-
 type Pod struct {
-    sync.RWMutex  
-    rootPage      *Page   // public profile info
-	configPage    *Page   // private profile info
-    urlWithSlash  string  // just to be clear pod urls MUST end in slash
-    cluster       *Cluster
-    pages         map[string]*Page
-    newPageNumber uint64  // ?switch to these being suffix for particular prefix
-	Listeners     PageListenerList  // ?switch to private
-	fullyLoaded   bool  // no pages still on disk
+	notifier
+	sync.RWMutex
+	rootPage      *Page  // public profile info
+	configPage    *Page  // private profile info
+	urlWithSlash  string // just to be clear pod urls MUST end in slash
+	cluster       *Cluster
+	pages         map[string]*Page
+	newPageNumber uint64           // ?switch to these being suffix for particular prefix
+	Listeners     PageListenerList // ?switch to private
+	fullyLoaded   bool             // no pages still on disk
 	pwHash        []byte
 }
 
-
 func NewPod(url string) (pod *Pod) {
-    pod = &Pod{}
+	pod = &Pod{}
 	pod.fullyLoaded = true
 	if !strings.HasSuffix(url, "/") {
 		// or should we flag an error?   eh, this seems okay.
-		url = url+"/"
+		url = url + "/"
 	}
 	pod.urlWithSlash = url
-    pod.pages = make(map[string]*Page)
-	pod.rootPage,_ = pod.PageByPath("", true)
+	pod.pages = make(map[string]*Page)
+	pod.rootPage, _ = pod.PageByPath("", true)
 	pod.rootPage.Set("_isPod", true)
 	// ...
 	return
 }
 
 func (pod *Pod) SetPassword(newPassword string) {
-	cost := 10   // should really set it to whatever takes 0.01s
+	cost := 10 // should really set it to whatever takes 0.01s
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), cost)
-    if err != nil {
-        panic(err)
-    }
+	if err != nil {
+		panic(err)
+	}
 	pod.pwHash = hashedPassword
 	pod.save()
 }
 
-
 func (pod *Pod) HasPassword(password string) bool {
-    err := bcrypt.CompareHashAndPassword(pod.pwHash, []byte(password))
+	if string(pod.pwHash) == "" && password == "" {
+		return true
+	}
+	err := bcrypt.CompareHashAndPassword(pod.pwHash, []byte(password))
 	if err == bcrypt.ErrMismatchedHashAndPassword {
 		return false
 	}
@@ -69,72 +67,93 @@ func (pod *Pod) HasPassword(password string) bool {
 }
 
 func (pod *Pod) touched(page *Page) {
-	pod.Listeners.Notify(page);
-    if pod.cluster != nil {
+
+	pod.Notify(page)
+
+	pod.Listeners.Notify(page)
+
+	if pod.cluster != nil {
 		pod.cluster.clusterTouched(page)
 	}
+
 }
 
 func (pod *Pod) URL() string {
-    return pod.urlWithSlash
+	return pod.urlWithSlash
 }
-
 
 func (pod *Pod) Pages() (result []*Page) {
 	pod.loadAllPages()
-    pod.RLock()
-    result = make([]*Page, 0, len(pod.pages))
-    for _, k := range pod.pages {
-        result = append(result, k)
-    }
-    pod.RUnlock()
-    return
+	return pod.loadedPages()
 }
 
+func (pod *Pod) loadedPages() (result []*Page) {
+	pod.RLock()
+	result = make([]*Page, 0, len(pod.pages))
+	for _, k := range pod.pages {
+		result = append(result, k)
+	}
+	pod.RUnlock()
+	return
+}
 
-
-
-/*  
+/*
    It's tempting to switch to having folks create a page, then
    add it to the site, but it gets complicated dealing with assigning
    a new unique path, or if the page already has a path that's already
    taken.   So we'll leave it like this for now.
 */
 
-
-func (pod *Pod) NewPage() (page *Page, etag string) {
-	page,_ = NewPage()
-    pod.Lock()
-    var path string
-    for {
-        path = fmt.Sprintf("a%d", pod.newPageNumber)
-        pod.newPageNumber++
-        if _, taken := pod.pages[path]; taken {
+func (pod *Pod) uniquePath() (path string) {
+	for {
+		path = fmt.Sprintf("a%d", pod.newPageNumber)
+		pod.newPageNumber++
+		if _, taken := pod.pages[path]; taken {
 			continue
-        }
+		}
 		if !pod.fullyLoaded {
 			if pod.pathTakenOnDisk(path) {
 				continue
 			}
 		}
 		break
-    }
-    page.path = path
-    page.pod = pod
-    etag = page.etag()
-    pod.pages[path] = page
-    pod.Unlock()
-    return
+	}
+	return
 }
+
+func (pod *Pod) NewPage(data ...map[string]interface{}) (page *Page, etag string) {
+	page, _ = NewPage(data...)
+	trace("Pod.NewPage data=%v", data)
+	pod.Lock()
+	page.path = pod.uniquePath()
+	trace("Pod.NewPage generated path=%v", page.path)
+	page.pod = pod
+	etag = page.etag()
+	pod.pages[page.path] = page
+	trace("Pod.NewPage added %p==%p", pod.pages[page.path], page)
+
+	pod.Unlock()
+
+	pod.touched(page)
+	return
+}
+
+func (pod *Pod) RemovePage(page *Page) {
+	pod.Lock()
+	defer pod.Unlock()
+	delete(pod.pages, page.path)
+}
+
 func (pod *Pod) PageByPath(path string, mayCreate bool) (page *Page, created bool) {
-    pod.Lock()
+	pod.Lock()
 	defer pod.Unlock()
 
-	//log.Printf("pagebypath: %s", path);
+	trace("Pod.PageByPath %v,%v", path, mayCreate)
 
-    page, _ = pod.pages[path]
+	page, _ = pod.pages[path]
+	trace("Pod.PageByPath map had: %+v", page)
 	if !pod.fullyLoaded && page == nil {
-		page,_ = NewPage()
+		page, _ = NewPage()
 		page.path = path
 		page.pod = pod
 		//log.Printf("pagebypath trying load: %s", path);
@@ -142,25 +161,25 @@ func (pod *Pod) PageByPath(path string, mayCreate bool) (page *Page, created boo
 		if loaded {
 			pod.pages[path] = page
 			return
-		} 
+		}
 		if err != nil {
 			panic(err)
 		}
 	}
-    if mayCreate && page == nil {
-		page,_ = NewPage()
-        page.path = path
-        page.pod = pod
-        pod.pages[path] = page
-        created = true
+	if mayCreate && page == nil {
+		page, _ = NewPage()
+		page.path = path
+		page.pod = pod
+		pod.pages[path] = page
+		created = true
 		return
-    }
-    if mayCreate && page.deleted {
+	}
+	if mayCreate && page.deleted {
 		// tiny race condition between this check and undelete...
-        page.Undelete()
-        created = true
+		page.Undelete()
+		created = true
 		return
-    }
+	}
 	if !mayCreate && page != nil && page.deleted {
 		page = nil
 		return
@@ -169,10 +188,18 @@ func (pod *Pod) PageByPath(path string, mayCreate bool) (page *Page, created boo
 }
 
 func (pod *Pod) PageByURL(url string, mayCreate bool) (page *Page, created bool) {
+	trace("Pod.PageByURL %q", url)
+
 	if len(url) < len(pod.urlWithSlash) {
+		trace("Pod.PageByURL too short", url)
 		return nil, false
 	}
-    path := url[len(pod.urlWithSlash):]
-    return pod.PageByPath(path, mayCreate)
+	path := url[len(pod.urlWithSlash):]
+	trace("Pod.PageByURL path=%q", path)
+	return pod.PageByPath(path, mayCreate)
 }
 
+// so that we can access this via an interface
+func (pod *Pod) AddListener(l chan interface{}) {
+	pod.Listeners.Add(l)
+}

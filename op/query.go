@@ -1,7 +1,7 @@
 package op
 
 import (
-	db "../data/inmem"
+	db "github.com/sandhawke/mapleseed/data/inmem"
 	"log"
 	"sort"
 	"time"

@@ -24,7 +24,7 @@ import (
 // modifications will be writen to disk.   
 //
 // It assumes it's the only thing writing to disk.  It wont read from
-// the disk once it has something in memory until a restart.
+// the disk once it has something in memory, until a restart.
 func (cluster *Cluster) FSBind(dirname string) {
 	cluster.fsroot = dirname    // this is the flag to be writing stuff
 	os.MkdirAll(dirname, 0700)
@@ -37,7 +37,7 @@ func (cluster *Cluster) FSBind(dirname string) {
 	//
 	// synthetic benchmark, just setting 1 var over and over (ie the
 	// case where a large queue helps the most), time for page.Set():
-	// go test -test.bench=YesCh (this is WITHFS)
+	// go test -bench=SetYesChangeWITHFS
 	//
 	//    q size     time
 	//      1         172014 ns/op
@@ -49,7 +49,14 @@ func (cluster *Cluster) FSBind(dirname string) {
 	dirtyQueue := make(Listener, 5000)
 	cluster.queueForFSB = dirtyQueue // ehhh, I didnt want to leak this
 
-	cluster.AddListener(dirtyQueue)
+	// We can't reliably use AddListener, because one of the other listeners
+	// can block delivery.   So use AddCallback instead, I guess.
+	///// cluster.AddListener(dirtyQueue)
+	cb := func(data interface{}) {
+		dirtyQueue <- data
+	}
+	cluster.AddCallback(&cb)
+
 	go func() {
 		for {
 			msg := <- dirtyQueue
@@ -97,6 +104,9 @@ func (pod *Pod) pathTakenOnDisk(path string) bool {
 }
 
 func (pod *Pod) filename() string {
+	if pod.cluster == nil {
+		return ""
+	}
 	return pod.cluster.fsroot+"/"+url.QueryEscape(pod.TrimmedName())
 }
 
@@ -135,22 +145,41 @@ func (page *Page) load() (loaded bool, err error) {
 		return false, nil
 	}
 
+	trace("page.load, filename: %q", page.filename())
+
+	stat, err := os.Stat(page.filename())
+	trace("stat %v %+v", err, stat)
+
+	wd, err := os.Getwd()
+	trace("wd %v %v", wd, err)
+
 	filename := page.filename()
 	src, err := os.Open(filename)
+	trace("10")
 	if err != nil {
 		if os.IsNotExist(err) {
+			trace("page.load no such file %v", err)
 			return false, nil
 		}
+		trace("page.load ERROR %v", err)
 		return false, err
 	}
-	defer src.Close()
+	trace("11")
 	dec := json.NewDecoder(src)
-	var obj JSON
-	if err := dec.Decode(&obj); err != nil {
+	trace("12")
+	obj := make(JSON)
+	trace("13")
+	err = dec.Decode(&obj)
+	trace("14")
+	src.Close()
+	trace("15")
+	if err != nil {
 		log.Println("BAD JSON restoring from ", filename)
 		log.Println(err)  // how did bad JSON get here?
 		return false, err
 	}
+	trace("xxx")
+	trace("page.load decoded: %+v", obj)
 	// pmap := obj.(map[string]interface {})
 	pmap := obj
 	// id := pmap["_id"].(string)
@@ -162,6 +191,7 @@ func (page *Page) load() (loaded bool, err error) {
 	page.SetProperties(pmap, "")
 	page.modCount = modCount
 	page.lastSaved = modCount
+	trace("page.load, got data: %+v", pmap)
 			
 	return true, nil
 }
@@ -268,10 +298,13 @@ func (pod *Pod) loadAllPages() {
 			log.Printf("New page was created while loading same URL from disk");
 		}
 	}
+	log.Printf("all pages loaded for %s", pod.URL())
 	pod.fullyLoaded = true
 }
 
 func (cluster *Cluster) recreatePodsFromDisk() {
+	//Trace = true
+	trace("recreatePodsFromDisk root %v", cluster.fsroot)
 	cluster.lock()
 	defer cluster.unlock()
 	
@@ -292,11 +325,12 @@ func (cluster *Cluster) recreatePodsFromDisk() {
 			panic(err)
 		}
 		pod := NewPod(url)
+		pod.fullyLoaded = false
+		cluster.locked_AddPod(pod)
 		pod.pwHash, err = ioutil.ReadFile(pod.filename()+"/pw")
 		if err != nil {
 			panic(err)
 		}
-		cluster.AddPod(pod)
-		log.Printf("restored pod %q from disk", name)
+		trace("recreatePodsFromDisk, got pod %v", name)
 	}
 }

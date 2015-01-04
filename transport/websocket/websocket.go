@@ -19,9 +19,21 @@ import (
 	"net/http"
 	// "net/http"
 	// "net"
-	db "../../data/inmem"
-	"../../op"
+	db "github.com/sandhawke/mapleseed/data/inmem"
+	"github.com/sandhawke/mapleseed/op"
 )
+
+
+var Trace bool
+func init() {
+	Trace = true
+}
+
+func trace(template string, args ...interface{}) {
+	if Trace {
+		log.Printf("ws."+template, args...)
+	}
+}
 
 type InMessage struct {
 	Seq  int     `json:"seq"`
@@ -79,9 +91,17 @@ func (act *WSAct) UserId() string {
 }
 
 func (act *WSAct) sendRaw(msg OutMessage) {
+<<<<<<< HEAD
 	log.Printf("--> %q", msg)
 	if act.closed {
 		panic("who is trying to send when act.closed?")
+=======
+	trace("sendRaw %+v", msg)	
+	if act.closed { 
+		return
+		//  -- at some point turn this back on -- 
+		// panic("who is trying to send when act.closed?") 
+>>>>>>> 638a14e81690878c70f746c7e42824bc82a81bb9
 	}
 	err := websocket.JSON.Send(act.ws, msg)
 	if err != nil {
@@ -114,11 +134,10 @@ func handler(cluster *db.Cluster, ws *websocket.Conn) {
 
 	// figure out thisPod by looking at the URL
 
-	log.Printf("websocket url?  %q", ws.Request().URL.String())
-	log.Printf("websocket url?  %q", ws.Request().URL.Scheme)
-	log.Printf("websocket url?  %q", ws.Request().URL.Host)
-	log.Printf("websocket url?  %q", ws.LocalAddr)
-	log.Printf("websocket url?  %q", ws.RemoteAddr)
+
+	trace("------------- new websocket -------------")
+	trace("handler localAddr   %+v", ws.LocalAddr)
+	trace("handler remoteAddr  %+v", ws.RemoteAddr)
 
 	for {
 		in := InMessage{nextSeq, "nop", nil}
@@ -126,11 +145,12 @@ func handler(cluster *db.Cluster, ws *websocket.Conn) {
 			if err == io.EOF {
 				return
 			}
-			log.Printf("websocket from %s err in receive: %q\n", origin, err)
+			trace("recv from %s err in receive: %q\n", origin, err)
 			return
 		}
 		nextSeq = in.Seq + 1
-		log.Printf("Received: %q\n", in)
+		trace("--recv--")
+		trace("recv'd: %+v", in)
 
 		act := &WSAct{ws, in.Seq, thisPod, cluster, userId, false}
 
@@ -154,22 +174,17 @@ func handler(cluster *db.Cluster, ws *websocket.Conn) {
 			userId, _ = in.Data["userId"].(string)
 			password, _ := in.Data["password"].(string)
 
-			log.Printf("1 %q %q", userId, password)
 			userPod = cluster.PodByURL(userId)
 			if userPod == nil {
-				log.Printf("2 %q", userPod)
 				// if pw is nil, then assume this is a <0.2.0 client
 				// and for now allow implicit creatione
 				if password == "" {
 					userPod = db.NewPod(userId)
-					log.Printf("3 %q", userPod)
 					err := cluster.AddPod(userPod)
-					log.Printf("4 %q", err)
 					// we know the name wasn't taken, per above
 					if err != nil {
 						panic(err)
 					}
-					log.Printf("5 %q", userPod)
 				} else {
 					act.Error(404, "No such user", op.JSON{})
 					userId = ""
@@ -177,24 +192,23 @@ func handler(cluster *db.Cluster, ws *websocket.Conn) {
 			} else {
 				log.Printf("100 %q", userPod)
 				if userPod.HasPassword(password) {
-					log.Printf("login worked for %s", userId)
+					trace("login worked for %s", userId)
 				} else {
 					act.Error(401, "Incorrect Password", op.JSON{})
 					userPod = nil
 					userId = ""
 				}
 			}
-			log.Printf("1000 %q", userPod)
-
-			log.Printf("logged in %q", userId)
+			trace("userPod=%+v", userPod)
+			trace("userId=%v", userId)
 			if userPod != nil {
-				log.Printf("userPod URL is %s", userPod.URL())
 				act.Result(nil)
 			}
 
 		case "whoami":
-			log.Printf("still logged in %s", userId)
-			act.Result(op.JSON{"userId": userId})
+			trace("still logged in %s", userId)
+			act.Result(op.JSON{"userId":userId})
+
 
 		case "createPod":
 			name, _ := in.Data["name"].(string)
@@ -203,10 +217,11 @@ func handler(cluster *db.Cluster, ws *websocket.Conn) {
 
 		case "create":
 			options := op.CreationOptions{}
-			log.Printf("op=create options=%q", in.Data)
-			options.InContainer, _ = in.Data["inContainer"].(string)
-			options.SuggestedName, _ = in.Data["suggestedName"].(string)
-			options.RequiredId, _ = in.Data["requiredId"].(string)
+			trace("op=create options=%q",in.Data)
+			options.InContainer,_ = in.Data["inContainer"].(string)
+			options.SuggestedName,_ = in.Data["suggestedName"].(string)
+			options.RequiredId,_ = in.Data["requiredId"].(string)
+
 
 			// I don't quite understand why we can't call it op.JSON here, but
 			// when we do, the value gets silently lost
@@ -249,7 +264,7 @@ func handler(cluster *db.Cluster, ws *websocket.Conn) {
 				options.Watching_Disappear = true
 			}
 
-			log.Printf("op=startQuery options=%q, parsed=%q", in.Data, options)
+			trace("op=startQuery options=%q, parsed=%q", in.Data, options)
 
 			op.StartQuery(act, options)
 
@@ -261,7 +276,7 @@ func handler(cluster *db.Cluster, ws *websocket.Conn) {
 			act.Result(op.JSON{"isPong": true, "modCount": cluster.ModCount()})
 
 		default:
-			log.Printf("Unimplemented op: %s", in.Op)
+			trace("Unimplemented op: %s", in.Op)
 			act.Error(400, "Operation unknown or unimplemented", op.JSON{})
 
 		}

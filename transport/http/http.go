@@ -14,10 +14,10 @@ based on client requests.
 package http
 
 import (
-	db "../../data/inmem"
-	"../../op"
 	"encoding/json"
 	"fmt"
+	db "github.com/sandhawke/mapleseed/data/inmem"
+	"github.com/sandhawke/mapleseed/op"
 	"log"
 	"net/http"
 	"strings"

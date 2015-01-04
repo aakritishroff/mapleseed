@@ -1,7 +1,7 @@
 package main
 
 import (
-	db "./data/inmem"
+	db "github.com/sandhawke/mapleseed/data/inmem"
 	"fmt"
 	"io"
 	"log"
@@ -59,7 +59,7 @@ func Test_Via_JS(t *testing.T) {
 	go io.Copy(os.Stdout, stdout)
 	go io.Copy(os.Stderr, stderr)
 	if err := cmd.Wait(); err != nil {
-		panic(err)
+		t.Error("Node.js tests failed; see Test_Via_JS.log")
 	}
 
 	fmt.Printf("bringing down server\n")

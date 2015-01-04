@@ -3,7 +3,7 @@ package inmem
 import (
 	"testing"
 	"os"
-	//"log"
+	"log"
 )
 
 func TestFS1(t *testing.T) {
@@ -11,36 +11,48 @@ func TestFS1(t *testing.T) {
 	podurl := "http://foo.example/bar/"
 	w := NewInMemoryCluster()
 	os.RemoveAll(testDir)
+	// defer os.RemoveAll(testDir)
 	w.FSBind(testDir)
-	p,existed := w.NewPod(podurl)
-	if existed {
+	p := NewPod(podurl)
+	err := w.AddPod(p)
+	if err != nil {
 		t.Error()
+		return
 	}
 	pg,_ := p.NewPage()
 	pg.Set("a", "100");
 	id := pg.URL()
 	w.Flush() // make sure everything's written before we try to re-read it
+	/////   BUT THIS DOESNT WORK ANY MORE, since
+	/////   we added to fork to listener.Notify()
 	w = nil
 	p = nil
 	pg = nil
 
 	w = NewInMemoryCluster()
 	w.FSBind(testDir)
-	p,existed = w.NewPod("http://foo.example/bar/")
-	if !existed {
-		t.Error("expected p to exist, but it didn't")
+	//log.Printf("w.pods after FSBind %q", w.pods)
+	p = w.PodByURL("http://foo.example/bar/")
+	if p == nil {
+		t.Error("expected p to exist, but it didn't")		
+		return
 	}
+	//log.Printf("%q", p.fullyLoaded)
 	pg,created := w.PageByURL(id, false)
 	if pg == nil {
 		t.Error()
+		return
 	}
 	if created {
 		t.Error()
+		return
 	}
+	//log.Printf("pg: %q", pg)
 	if pg.GetDefault("a", nil) != "100" {
-		t.Error()
+		log.Printf("page.appData value was %+v", pg.appData)
+		t.Error("page didn't have expected value")
+		return
 	}
-	os.RemoveAll(testDir)
 }
 
 
@@ -50,8 +62,9 @@ func BenchmarkSetYesChangeWITHFS(b *testing.B) {
 	w := NewInMemoryCluster()
 	os.RemoveAll(testDir)
 	w.FSBind(testDir)
-	pod,existed := w.NewPod(podurl)
-	if existed {
+	pod := NewPod(podurl)
+	err := w.AddPod(pod)
+	if err != nil {
 		b.Error()
 	}
 
@@ -72,8 +85,9 @@ func BenchmarkSetYesChangeWITHFSAndFlush(b *testing.B) {
 	w := NewInMemoryCluster()
 	os.RemoveAll(testDir)
 	w.FSBind(testDir)
-	pod,existed := w.NewPod(podurl)
-	if existed {
+	pod := NewPod(podurl)
+	err := w.AddPod(pod)
+	if err != nil {
 		b.Error()
 	}
 

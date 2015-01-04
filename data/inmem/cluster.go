@@ -11,7 +11,7 @@ import (
 )
 
 type Cluster struct {
-    // Page
+	notifier
 	mutex          sync.RWMutex // public functions are threadsafe
     pods map[string]*Pod
 
@@ -34,7 +34,14 @@ func (cluster *Cluster) clusterTouched(page *Page) {
     cluster.modCount++
     cluster.modlock.Unlock()
     cluster.modified.Broadcast()
+	cluster.Notify(page)
 	cluster.Listeners.Notify(page)
+}
+
+func (cluster *Cluster) getModCount() uint64 {
+    cluster.modlock.Lock()
+	defer cluster.modlock.Unlock()
+    return cluster.modCount
 }
 
 func (cluster *Cluster) WaitForModSince(ver uint64) {
@@ -88,28 +95,34 @@ func (cluster *Cluster) Pods() (result []*Pod) {
 
 var NameAlreadyTaken = errors.New("URL already taken");
 
-func (cluster *Cluster) AddPod(pod *Pod) error {
-
-	log.Printf("2000")
+func (cluster *Cluster) AddPod(pod interface{}) error {
+	
+	mpod := pod.(*Pod)
+	
     cluster.lock()
     defer cluster.unlock()
+	return cluster.locked_AddPod(mpod)
+}
 
-	log.Printf("2001")
+func (cluster *Cluster) locked_AddPod(pod *Pod) error {
+
 	url := pod.URL()
     if _, existed := cluster.pods[url]; existed {
-		log.Printf("2005")
 		return NameAlreadyTaken
     }
 
-	log.Printf("2010")
-	// use a SetClusterPointer() to pod can be an interface?
+	// use a SetClusterPointer() so pod can be an interface?
 	// ... except that might might folks think it's safe to
-	// mess with...
+	// call it themselves
     pod.cluster = cluster
 
     cluster.pods[url] = pod
-    cluster.clusterTouched(pod.rootPage)   // FIXME really should be ALL PAGES
 	pod.save()
+
+	for _,page := range pod.loadedPages() {
+		cluster.clusterTouched(page)
+	}
+ 
     return nil
 }
 
@@ -123,15 +136,18 @@ func (cluster *Cluster) PodByURL(url string) (pod *Pod) {
 func (cluster *Cluster) PageByURL(url string, mayCreate bool) (page *Page, created bool) {
     // if we had a lot of pods we could hardcode some logic about
     // what their URLs look like, but for now this should be fine.
+	trace("Cluster.PageByURL(%v)", url) 
     cluster.rlock()
     defer cluster.runlock()
     for _, pod := range cluster.pods {
+		trace("Cluster.PageByURL maybe pod %v", pod.urlWithSlash)
         if strings.HasPrefix(url, pod.urlWithSlash) {
             page, created = pod.PageByURL(url, mayCreate)
             return
         }
     }
 	log.Printf("can't do PageByURL -- no suitable pod: %q:", url)
+	trace("Cluster.PageByURL(%v) -- NO POD MATCHES", url) 
     return
 }
 

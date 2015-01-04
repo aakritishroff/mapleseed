@@ -2,18 +2,24 @@ package inmem
 
 import (
     "encoding/json"
-	"time"
-	"../slowclock"
+	// "time"
+	"github.com/sandhawke/mapleseed/data/slowclock"
 )
 
 
-func NewPage() (page *Page, etag string) {
+func NewPage(data ...map[string]interface{}) (page *Page, etag string) {
 	page = &Page{}
     page.path = ""
     page.pod = nil
     etag = page.etag()
-	page.lastModified = time.Now().UTC()
-	page.appData = make(map[string]interface{})
+	page.lastModified = slowclock.Now().UTC()
+	if len(data) == 0 {
+		page.appData = make(map[string]interface{})
+	} else if len(data) == 1 {
+		page.appData = data[0]
+	} else {
+		panic("too many arguments to NewPage")
+	}
     return
 }
 
@@ -26,7 +32,11 @@ func (page *Page) doneWithLock(startingMod uint64) {
 
 	modified := startingMod != page.modCount
 
-	page.mutex.Unlock()
+	// can we please get rid of this, soon?  Currently needed by query
+	if modified && page.pod != nil && page.pod.cluster != nil {
+		// shouldn't be lockr the cluster?    but might that give deadlock?
+		page.clusterModCount = page.pod.cluster.getModCount()
+	}
 
 	if modified {
 		// we use slowclock.Now() instead of time.Now() because
@@ -34,16 +44,24 @@ func (page *Page) doneWithLock(startingMod uint64) {
 		// (2) using time.Now() was a huge slowdown.  This change increases
 		// single-property write speed by nearly 4x in simple benchmark.
 		page.lastModified = slowclock.Now().UTC()
+	}
 
-		page.Listeners.Notify(page);
-		if page.pod != nil {
-			page.pod.touched(page)
-			if page.pod.cluster != nil {
-				// I'd like to remove this hack soon....  needed by
-				// current query infrastructure
-				page.clusterModCount = page.pod.cluster.modCount
+	page.mutex.Unlock()
+
+
+	if modified {
+		// as func so we can play with making it a goroutine
+		// -- turns out wam runs ~5% slower if we do
+		func () {
+			page.Notify(page)
+			page.Listeners.Notify(page)
+			if page.pod != nil {
+				//log.Printf("pod.touched")
+				page.pod.touched(page)
+				//log.Printf("pod.touched DONE")
 			}
-		}
+		}()
+
 	}
 }
 
@@ -83,18 +101,19 @@ func (page *Page) SetProperties(m map[string]interface{}, onlyIfMatch string) (e
     return
 }
 
-// Delete still needs work.  For now, it just marks it as deleted and
-// forgets most of the data it stores.  Actually reclaiming all
-// storage would have to be done differently, since there are pointers
-// to this page.  Also, what about ACLs and what etag to use if one
-// re-creates this URL?  (etags need to be like "20141204-3" maybe,
-// assuming we can remember deleted pages for a day.)
+// What about ACLs and what etag to use if one re-creates this URL?
+// (etags need to be like "20141204-3" maybe, assuming we can remember
+// deleted pages for a day.)
+
 func (page *Page) Delete() {
     page.mutex.Lock()
     defer page.doneWithLock(page.modCount)
     page.deleted = true
 	page.appData = make(map[string]interface{})
 	page.modCount++
+	if page.pod != nil {
+		page.pod.RemovePage(page)
+	}
 }
 
 func (page *Page) Undelete() {
