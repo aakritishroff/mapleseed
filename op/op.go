@@ -7,7 +7,7 @@ maybe other things (like ./op_test.go).
 
 The operations are basically CRUD + Query, but set up for being on the
 Web and for real-time data sync.
-
+``````
 Might be called DatapageNetworkAPI or something like that.
 
 
@@ -24,8 +24,7 @@ string, since it can be nil?   Or just *string.
 package op
 
 import (
-	db "../data/inmem"
-	"fmt"
+	//"fmt"
 	"log"
 	"regexp"
 	// "fmt"
@@ -135,14 +134,14 @@ func Create(act Act, options CreationOptions) {
 
 	act.Result(JSON{"_id": page.URL(), "_etag": etag})
 
-	val, ok := page.Get("isPublic")
+	/*val, ok := page.Get("isPublic")
 	if !ok { //if property not set, add owner to readers.
 		createACL(page, act.UserId(), false) //creates private ACL.
 	} else {
 		if val.(bool) == false {
 			createACL(page, act.UserId(), false) //add owner to readers is property is{ublic == false}
 		}
-	}
+	}*/
 
 	/*
 		      ADD:

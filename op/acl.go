@@ -16,13 +16,13 @@ import (
 
 var propPub = "isPublic"    //constant variable used to access acl property in datapage's appData
 var propReaders = "readers" //constant variable used to access acl property in datapage's appData
+var propOwner = "_owner"
 
 /*
-If owner doesn't set isPublic property during creation, we set it to false, and add owner to readers.
-If owner sets isPublic to false, we add owner to readers (append to list if readers already set by owner)
-If owner sets to true
+If owner doesn't set isPublic property during creation, defaults to true.
+If owner sets isPublic to false, only owner and userIDs in set of "readers" are allowed to read.
 */
-func createACL(page *db.Page, owner string, isPub bool) {
+/*func createACL(page *db.Page, owner string, isPub bool) {
 	page.Set(propPub, isPub)
 
 	oldReaders, ok := page.Get(propReaders)
@@ -35,16 +35,24 @@ func createACL(page *db.Page, owner string, isPub bool) {
 		log.Printf("Created ACL... Owner: %s, isPublic: %t, Readers: %s", owner, isPub, newReaders)
 	}
 
-}
+}*/
 
 /*
 Checks if user with userID can read datapage
 */
 func isReadable(userID string, page *db.Page) bool {
 	isPublic, readers, ok := getACL(page)
+	owner, _ := page.Get(propOwner)
+
+	if userID == owner.(string) {
+		return true
+	}
+
 	if !ok {
+		log.Printf("getACL did not find ACL. Check code..")
 		return false
 	}
+
 	if isPublic {
 		return true
 	}
@@ -72,11 +80,25 @@ func isWritable(userID string, page *db.Page) bool {
 
 /*
 Get ACL for datapage
-Returns (false, []string{"uid1", "uid2"}) or (false, []string{}) (empty slice if isPublic == true)
+ok = false iff isPublic false, but "readers" non-existant
 */
 func getACL(page *db.Page) (isPublic bool, readers []string, ok bool) {
-	val1, exists1 := page.Get(propPub)
-	if exists1 {
+	valPub, existsPub := page.Get(propPub)
+	valReaders, existsReaders := page.Get(propReaders)
+	ok = false
+	if existsPub {
+		isPublic = valPub.(bool)
+		if isPublic {
+			readers = []string{}
+			ok = true
+		}
+	}
+	if existsReaders {
+		readers = valReaders.([]string)
+		ok = true
+	}
+	return
+	/*if exists1 {
 		isPublic = val1.(bool)
 		if !isPublic {
 			val2, exists2 := page.Get(propReaders)
@@ -95,7 +117,7 @@ func getACL(page *db.Page) (isPublic bool, readers []string, ok bool) {
 		log.Println("isPublic property not found! Either page doesn't exist or shouldn't reach here!")
 		ok = false
 	}
-	return
+	return*/
 
 }
 

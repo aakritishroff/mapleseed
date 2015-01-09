@@ -23,8 +23,8 @@ import (
 	"github.com/aakritishroff/mapleseed/op"
 )
 
-
 var Trace bool
+
 func init() {
 	Trace = true
 }
@@ -91,17 +91,11 @@ func (act *WSAct) UserId() string {
 }
 
 func (act *WSAct) sendRaw(msg OutMessage) {
-<<<<<<< HEAD
-	log.Printf("--> %q", msg)
+	trace("sendRaw %+v", msg)
 	if act.closed {
-		panic("who is trying to send when act.closed?")
-=======
-	trace("sendRaw %+v", msg)	
-	if act.closed { 
 		return
-		//  -- at some point turn this back on -- 
-		// panic("who is trying to send when act.closed?") 
->>>>>>> 638a14e81690878c70f746c7e42824bc82a81bb9
+		//  -- at some point turn this back on --
+		// panic("who is trying to send when act.closed?")
 	}
 	err := websocket.JSON.Send(act.ws, msg)
 	if err != nil {
@@ -133,7 +127,6 @@ func handler(cluster *db.Cluster, ws *websocket.Conn) {
 	var thisPod *db.Pod
 
 	// figure out thisPod by looking at the URL
-
 
 	trace("------------- new websocket -------------")
 	trace("handler localAddr   %+v", ws.LocalAddr)
@@ -207,8 +200,7 @@ func handler(cluster *db.Cluster, ws *websocket.Conn) {
 
 		case "whoami":
 			trace("still logged in %s", userId)
-			act.Result(op.JSON{"userId":userId})
-
+			act.Result(op.JSON{"userId": userId})
 
 		case "createPod":
 			name, _ := in.Data["name"].(string)
@@ -217,11 +209,10 @@ func handler(cluster *db.Cluster, ws *websocket.Conn) {
 
 		case "create":
 			options := op.CreationOptions{}
-			trace("op=create options=%q",in.Data)
-			options.InContainer,_ = in.Data["inContainer"].(string)
-			options.SuggestedName,_ = in.Data["suggestedName"].(string)
-			options.RequiredId,_ = in.Data["requiredId"].(string)
-
+			trace("op=create options=%q", in.Data)
+			options.InContainer, _ = in.Data["inContainer"].(string)
+			options.SuggestedName, _ = in.Data["suggestedName"].(string)
+			options.RequiredId, _ = in.Data["requiredId"].(string)
 
 			// I don't quite understand why we can't call it op.JSON here, but
 			// when we do, the value gets silently lost
