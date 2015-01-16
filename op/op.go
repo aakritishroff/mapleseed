@@ -211,7 +211,7 @@ func Read(act Act, url string) {
 		act.Error(404, "page not found", JSON{})
 		return
 	}
-	if !isReadable(act.UserId(), page) {
+	if !IsReadable(act.UserId(), page) {
 		act.Error(550, "Permission Denied. Not in list of page's readers", JSON{})
 		return
 	}

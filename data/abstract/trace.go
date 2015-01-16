@@ -9,4 +9,3 @@ func trace(template string, args ...interface{}) {
 		log.Printf("data/abstract: "+template, args...)
 	}
 }
-

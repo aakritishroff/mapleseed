@@ -2,6 +2,7 @@ package abstract
 
 import (
 	"github.com/aakritishroff/mapleseed/data/inmem"
+	"github.com/aakritishroff/mapleseed/op"
 )
 
 type JSON map[string]interface{}
@@ -66,4 +67,8 @@ func NewPage(impl string) (page Page, etag string) {
 	} else {
 		panic("unknown implementation requested")
 	}
+}
+
+func IsReadable(userID string, page Page) bool {
+	return op.IsReadable(userID, page.(*inmem.Page))
 }

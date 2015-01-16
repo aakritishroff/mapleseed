@@ -10,13 +10,15 @@ page.appData["readers"] -->[]string (== userIDs of authorized readers)
 package op
 
 import (
+	"fmt"
 	db "github.com/aakritishroff/mapleseed/data/inmem"
 	"log"
+	"strconv"
 )
 
 var propPub = "isPublic"    //constant variable used to access acl property in datapage's appData
 var propReaders = "readers" //constant variable used to access acl property in datapage's appData
-var propOwner = "_owner"
+var propOwner = "owner"
 
 /*
 If owner doesn't set isPublic property during creation, defaults to true.
@@ -40,19 +42,20 @@ If owner sets isPublic to false, only owner and userIDs in set of "readers" are 
 /*
 Checks if user with userID can read datapage
 */
-func isReadable(userID string, page *db.Page) bool {
+func IsReadable(userID string, page *db.Page) bool {
 	isPublic, readers, ok := getACL(page)
 	owner, _ := page.Get(propOwner)
-
+	fmt.Println(userID)
+	fmt.Println(owner)
 	if userID == owner.(string) {
 		return true
 	}
 
+	//implies error
 	if !ok {
 		log.Printf("getACL did not find ACL. Check code..")
 		return false
 	}
-
 	if isPublic {
 		return true
 	}
@@ -80,18 +83,21 @@ func isWritable(userID string, page *db.Page) bool {
 
 /*
 Get ACL for datapage
-ok = false iff isPublic false, but "readers" non-existant
+ok = false if isPublic false, but "readers" non-existent
 */
 func getACL(page *db.Page) (isPublic bool, readers []string, ok bool) {
 	valPub, existsPub := page.Get(propPub)
 	valReaders, existsReaders := page.Get(propReaders)
 	ok = false
 	if existsPub {
-		isPublic = valPub.(bool)
+		isPublic, _ = strconv.ParseBool(valPub.(string))
+		fmt.Println(isPublic)
 		if isPublic {
 			readers = []string{}
 			ok = true
 		}
+	} else {
+		ok = true //isPublic property not set, assume True
 	}
 	if existsReaders {
 		readers = valReaders.([]string)
