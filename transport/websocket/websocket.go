@@ -255,7 +255,7 @@ func handler(cluster *db.Cluster, ws *websocket.Conn) {
 				options.Watching_Disappear = true
 			}
 
-			trace("op=startQuery options=%q, parsed=%q", in.Data, options)
+			trace("op=startQuery options=%+v, parsed=%+v", in.Data, options)
 
 			op.StartQuery(act, options)
 

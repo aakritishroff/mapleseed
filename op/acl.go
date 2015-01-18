@@ -10,7 +10,7 @@ page.appData["readers"] -->[]string (== userIDs of authorized readers)
 package op
 
 import (
-	"fmt"
+	//"fmt"
 	db "github.com/aakritishroff/mapleseed/data/inmem"
 	"log"
 	"strconv"
@@ -44,11 +44,12 @@ Checks if user with userID can read datapage
 */
 func IsReadable(userID string, page *db.Page) bool {
 	isPublic, readers, ok := getACL(page)
-	owner, _ := page.Get(propOwner)
-	fmt.Println(userID)
-	fmt.Println(owner)
-	if userID == owner.(string) {
-		return true
+	log.Printf("isPublic %v", isPublic)
+	owner, exists := page.Get(propOwner)
+	if exists {
+		if userID == owner.(string) {
+			return true
+		}
 	}
 
 	//implies error
@@ -90,14 +91,16 @@ func getACL(page *db.Page) (isPublic bool, readers []string, ok bool) {
 	valReaders, existsReaders := page.Get(propReaders)
 	ok = false
 	if existsPub {
+		ok = true
 		isPublic, _ = strconv.ParseBool(valPub.(string))
-		fmt.Println(isPublic)
 		if isPublic {
 			readers = []string{}
-			ok = true
 		}
 	} else {
 		ok = true //isPublic property not set, assume True
+		isPublic = true
+		readers = []string{}
+		//log.Printf("No isPublic set! ok = %v", ok)
 	}
 	if existsReaders {
 		readers = valReaders.([]string)

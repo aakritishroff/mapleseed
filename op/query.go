@@ -60,7 +60,9 @@ func (query *Query) constructFilter(expr JSON) {
 	// filter function?   *shrug*
 
 	query.filter = func(page *db.Page) bool {
-		if IsReadable(query.act.UserId(), page) {
+		allowed := IsReadable(query.act.UserId(), page)
+		log.Printf("Properties of Page %+v isReadable %v", page.Properties(), allowed)
+		if allowed {
 			return pagePassesFilter(page, expr)
 		}
 		return false
