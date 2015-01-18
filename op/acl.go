@@ -44,7 +44,6 @@ Checks if user with userID can read datapage
 */
 func IsReadable(userID string, page *db.Page) bool {
 	isPublic, readers, ok := getACL(page)
-	log.Printf("isPublic %v", isPublic)
 	owner, exists := page.Get(propOwner)
 	if exists {
 		if userID == owner.(string) {
