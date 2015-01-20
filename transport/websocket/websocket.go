@@ -129,8 +129,8 @@ func handler(cluster *db.Cluster, ws *websocket.Conn) {
 	// figure out thisPod by looking at the URL
 
 	trace("------------- new websocket -------------")
-	trace("handler localAddr   %+v", ws.LocalAddr)
-	trace("handler remoteAddr  %+v", ws.RemoteAddr)
+	trace("handler localAddr   %v", ws.LocalAddr)
+	trace("handler remoteAddr  %v", ws.RemoteAddr)
 
 	for {
 		in := InMessage{nextSeq, "nop", nil}

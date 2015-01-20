@@ -27,6 +27,10 @@ type Pod struct {
 	pwHash        []byte
 }
 
+func (pod *Pod) Cluster() *Cluster {
+	return pod.cluster
+}
+
 func NewPod(url string) (pod *Pod) {
 	pod = &Pod{}
 	pod.fullyLoaded = true

@@ -9,10 +9,15 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/user"
 	"time"
 )
 
 type JSON map[string]interface{}
+
+type PodRPCServer struct {
+	cluster db.Cluster
+}
 
 func serve(cluster *db.Cluster, portString string) {
 	log.Printf("Answering on %s%s", cluster.HubURL, portString)

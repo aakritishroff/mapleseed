@@ -4,6 +4,9 @@ import (
 	"testing"
 )
 
+//Test: creating a new page, someone else notices it,
+//they create a page in reply, you notice that, and you each delete your pages
+
 // shared with other benchmark files
 const whamNumPlayers = 1
 
